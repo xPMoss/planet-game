@@ -1,0 +1,28 @@
+{
+  "name": "planet-game",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "bootstrap-icons": "^1.13.1",
+    "phaser": "^4.2.1",
+    "zustand": "^5.0.15"
+  },
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
