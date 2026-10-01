@@ -32,13 +32,23 @@ export class MobileControls {
         this.container.className = "absolute bottom-0 w-full flex justify-between items-center text-4xl p-4 pointer-events-none z-10";
 
         this.container.innerHTML = `
-        <div class="flex gap-4 items-start">
-            <button id="btn-left" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                <i class="bi bi-caret-left"></i>
-            </button>
+        <div class="flex flex-col justify-between gap-0 items-start">
+                <button id="btn-up" class="mx-auto w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+                <i class="bi bi-caret-up"></i>
+              </button>
+          
+            <span class="flex gap-4">
+                 <button id="btn-left" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+                    <i class="bi bi-caret-left"></i>
+                    </button>
+                <button id="btn-right" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+                    <i class="bi bi-caret-right"></i>
+                </button>
+            </span>
+       
 
-            <button id="btn-right" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                <i class="bi bi-caret-right"></i>
+            <button id="btn-down" class="mx-auto w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+                <i class="bi bi-caret-down"></i>
             </button>
         </div>
 
@@ -69,6 +79,7 @@ export class MobileControls {
         this.bindButton("btn-right", "right");
         this.bindButton("btn-jump", "jump");
         this.bindButton("btn-up", "up");
+        this.bindButton("btn-down", "down");
         this.bindButton("btn-primaryAction", "primaryAction");
         this.bindButton("btn-secondaryAction", "secondaryAction");
     }
