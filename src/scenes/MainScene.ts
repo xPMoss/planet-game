@@ -4,6 +4,7 @@ import { Player } from "../game/Player";
 import { CameraController } from "../game/Camera";
 import { MiningManager } from "../game/MiningManager";
 import { BuildingManager } from "../game/BuildingManager";
+import { HighlightManager } from "../game/HighlightManager";
 
 import { MobileControls } from "../ui/MobileControls";
 
@@ -11,6 +12,7 @@ export class MainScene extends Phaser.Scene {
   private planet!: Planet;
   private player!: Player;
   private cameraController!: CameraController;
+  private highlightManager!: HighlightManager;
   private miningManager!: MiningManager;
   private buildingManager!: BuildingManager;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -66,9 +68,10 @@ export class MainScene extends Phaser.Scene {
     this.cameraController = new CameraController(this, this.planet, this.player);
     this.cameraController.follow(this.player.sprite);
 
-    // Initiera Mining Manager
-    this.miningManager = new MiningManager(this, this.planet, this.player);
-    this.buildingManager = new BuildingManager(this, this.planet, this.player);
+    // Initiera Highlight Manager först och skicka med den till Mining och Building
+    this.highlightManager = new HighlightManager(this, this.planet, this.player);
+    this.miningManager = new MiningManager(this, this.planet, this.player, this.highlightManager);
+    this.buildingManager = new BuildingManager(this, this.planet, this.player, this.highlightManager);
 
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
@@ -87,11 +90,13 @@ export class MainScene extends Phaser.Scene {
   }
 
   override update(): void {
-    if (!this.player || !this.miningManager || !this.buildingManager) return;
+    if (!this.player || !this.highlightManager || !this.miningManager || !this.buildingManager) return;
 
     this.player.update(this.cursors, this.mobileControls.state);
     this.cameraController.update();
 
+    // Uppdatera markören samt båda managers med mobiltillståndet
+    this.highlightManager.update();
     this.miningManager.update(this.mobileControls.state);
     this.buildingManager.update(this.mobileControls.state);
   }
