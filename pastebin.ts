@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { Planet } from "./Planet";
 import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture } from "./playerHelpers";
-import type { MobileInputState } from "../ui/MobileControls";
 
 export class Player {
     private scene: Phaser.Scene;
@@ -15,8 +14,8 @@ export class Player {
     private isGrounded: boolean = false;
     private maxVelocity: number = 8;
 
-    private hat!: Phaser.GameObjects.Sprite;
-    private direction: "right" | "left" | "up" | "down" = "right";
+    private hat: Phaser.GameObjects.Sprite;
+    private facingRight: boolean = true;
 
     // Återanvänd Vector2-objekt för att undvika Garbage Collection
     private gravityVector: Phaser.Math.Vector2 = new Phaser.Math.Vector2();
@@ -39,7 +38,7 @@ export class Player {
 
         const body = this.scene.matter.bodies.rectangle(startX, startY, this.settings.width, this.settings.height, {
             friction: 0.1,
-            frictionAir: 0.01,
+            frictionAir: 0.05,
             restitution: 0,
             chamfer: { radius: 4 },
         });
@@ -81,12 +80,8 @@ export class Player {
         }
     }
 
-    public update(cursors: Phaser.Types.Input.Keyboard.CursorKeys, mobileState?: MobileInputState): void {
-        if (!this.sprite.body || !this.sprite.body.velocity || !this.sprite.body.position) return;
-
-        const body = this.sprite.body as MatterJS.BodyType;
-
-        const velocity = body.velocity;
+    public update(cursors: Phaser.Types.Input.Keyboard.CursorKeys): void {
+        const velocity = this.sprite.body.velocity;
         const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
 
         if (currentSpeed > this.maxVelocity) {
@@ -97,6 +92,10 @@ export class Player {
                 x: velocity.x * scale,
                 y: velocity.y * scale,
             });
+        }
+
+        if (cursors.space.isDown) {
+            console.log("update", cursors, this.isGrounded);
         }
 
         const playerPos = this.sprite.body.position;
@@ -127,31 +126,37 @@ export class Player {
         const tangentX = dirY;
         const tangentY = -dirX;
 
+        /*
+// I Player.ts update():
+if (cursors.left.isDown) {
+  this.sprite.setVelocity(
+    this.sprite.body.velocity.x - tangentX * 0.5,
+    this.sprite.body.velocity.y - tangentY * 0.5
+  );
+} else if (cursors.right.isDown) {
+  this.sprite.setVelocity(
+    this.sprite.body.velocity.x + tangentX * 0.5,
+    this.sprite.body.velocity.y + tangentY * 0.5
+  );
+}
+
+        */
+
         const currentVel = this.sprite.body.velocity;
         const targetSpeed = 4; // Önskad rörelsehastighet
 
-        const isLeft = cursors.left.isDown || Boolean(mobileState?.left);
-        const isRight = cursors.right.isDown || Boolean(mobileState?.right);
-        const isDown = cursors.down.isDown || Boolean(mobileState?.down);
-        const isUp = cursors.space.isDown || Phaser.Input.Keyboard.JustDown(cursors.up) || Boolean(mobileState?.up);
-
-        if (isLeft) {
+        if (cursors.left.isDown) {
             // Bevara befintlig hastighet mot/från centrum, men sätt tangenten
             this.sprite.setVelocity(-tangentX * targetSpeed + currentVel.x * 0.1, -tangentY * targetSpeed + currentVel.y * 0.1);
-            this.direction = "left";
         }
 
-        if (isRight) {
+        if (cursors.right.isDown) {
             this.sprite.setVelocity(tangentX * targetSpeed + currentVel.x * 0.1, tangentY * targetSpeed + currentVel.y * 0.1);
-            this.direction = "right";
         }
 
-        if (isDown) {
-            this.direction = "down";
-        }
-
-        if (isUp && this.isGrounded) {
-            const jumpSpeed = 16;
+        // I Player.ts (update-metoden under punkt 5 - Hopp):
+        if (Phaser.Input.Keyboard.JustDown(cursors.up) && this.isGrounded) {
+            const jumpSpeed = 8;
 
             // Beräkna riktningen "upp" utifrån spelarens egen rotation
             // (Inom Phaser/Math motsvarar sprite.rotation - Math.PI / 2 riktningen rakt upp från spriten)
@@ -163,6 +168,31 @@ export class Player {
 
             this.isGrounded = false;
         }
+
+        /*
+        if (cursors.left.isDown) {
+            this.moveVector.set(-tangentX * this.moveSpeed, -tangentY * this.moveSpeed);
+            this.sprite.applyForce(this.moveVector);
+            this.facingRight = false;
+        }
+
+        if (cursors.right.isDown) {
+            this.moveVector.set(tangentX * this.moveSpeed, tangentY * this.moveSpeed);
+            this.sprite.applyForce(this.moveVector);
+            this.facingRight = true;
+        }
+           
+        // Hopp (Aktivt endast när spelaren står på marken)
+        if ((cursors.space.isDown && this.isGrounded) || (Phaser.Input.Keyboard.JustDown(cursors.up) && this.isGrounded)) {
+            console.log("HOPPAR");
+            // Slungar spelaren rakt ut från centrum (motsatt riktning mot dirX/dirY)
+            this.jumpVector.set(-dirX * this.jumpForce, -dirY * this.jumpForce);
+            this.sprite.applyForce(this.jumpVector);
+
+            this.isGrounded = false;
+        }
+
+         */
 
         this.updateHatPosition();
     }
@@ -182,6 +212,6 @@ export class Player {
         this.hat.setPosition(this.sprite.x + upX * headOffset, this.sprite.y + upY * headOffset);
 
         this.hat.setRotation(currentRotation);
-        this.hat.setFlipX(this.direction === "left");
+        this.hat.setFlipX(!this.facingRight);
     }
 }

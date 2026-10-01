@@ -1,8 +1,8 @@
-import Phaser from 'phaser';
-import type { Planet } from './Planet';
-import type { BlockType, ResourceType } from '../types/GameTypes';
-import type { Player } from './Player';
-import { useGameStore } from '../store/useGameStore';
+import Phaser from "phaser";
+import type { Planet } from "./Planet";
+import type { BlockType, ResourceType } from "../types/GameTypes";
+import type { Player } from "./Player";
+import { useGameStore } from "../store/useGameStore";
 
 export class MiningManager {
     private readonly scene: Phaser.Scene;
@@ -41,8 +41,7 @@ export class MiningManager {
     }
 
     private setupInput(): void {
-        this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-
+        this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
             // Omvandla skärmkoordinater till spelvärldskoordinater
             const worldPoint = pointer.positionToCamera(this.scene.cameras.main) as Phaser.Math.Vector2;
 
@@ -55,7 +54,7 @@ export class MiningManager {
             // Hitta vilket block som träffades
             const gridX = Math.floor(worldPoint.x / this.planet.config.blockSize);
             const gridY = Math.floor(worldPoint.y / this.planet.config.blockSize);
-            const key = gridX + ',' + gridY;
+            const key = gridX + "," + gridY;
 
             const block = this.planet.blocks.get(key);
             if (block) {
@@ -67,7 +66,7 @@ export class MiningManager {
     }
 
     private mineBlock(x: number, y: number, type: BlockType): void {
-        const key = x + ',' + y;
+        const key = x + "," + y;
         const block = this.planet.blocks.get(key);
         if (!block) return;
 
@@ -96,12 +95,12 @@ export class MiningManager {
     }
 
     private mapBlockToResource(type: BlockType): ResourceType | null {
-        if (type === 0) return 'dirt';
-        if (type === 1) return 'stone';
-        if (type === 2) return 'coal';
-        if (type === 3) return 'iron_ore';
-        if (type === 4) return 'gold_ore';
-        if (type === 5) return 'diamond';
+        if (type === 0) return "dirt";
+        if (type === 1) return "stone";
+        if (type === 2) return "coal";
+        if (type === 3) return "iron_ore";
+        if (type === 4) return "gold_ore";
+        if (type === 5) return "diamond";
         return null;
     }
 }

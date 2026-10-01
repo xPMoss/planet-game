@@ -1,8 +1,6 @@
-
-
 // Item Types
-export type ResourceType = 'wood' | 'dirt' | 'stone' | 'coal' | 'iron_ore' | 'iron_ingot' | 'gold_ore' | 'diamond' | 'core';
-export type ToolType = 'Wood Pickaxe' | 'Iron Pickaxe' | 'Gold Pickaxe' | 'Diamond Pickaxe';
+export type ResourceType = "wood" | "dirt" | "stone" | "coal" | "iron_ore" | "iron_ingot" | "gold_ore" | "diamond" | "core";
+export type ToolType = "Wood Pickaxe" | "Iron Pickaxe" | "Gold Pickaxe" | "Diamond Pickaxe";
 
 export interface Tool {
     name: string;
@@ -23,7 +21,7 @@ export const BlockType = {
     CORE: 99,
 } as const;
 
-export type BlockType = typeof BlockType[keyof typeof BlockType];
+export type BlockType = (typeof BlockType)[keyof typeof BlockType];
 
 export interface BlockData {
     x: number;
@@ -31,7 +29,7 @@ export interface BlockData {
     type: BlockType;
     hp: number;
     maxHp: number;
-    body: Phaser.Physics.Matter.Image;
+    body: Phaser.GameObjects.Image | Phaser.Physics.Matter.Image;
 }
 
 export interface PlanetConfig {

@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import Phaser from "phaser";
 
 export interface PlayerSettings {
   gravityStrength: number;
@@ -10,7 +10,7 @@ export interface PlayerSettings {
   restitution: number;
   width: number;
   height: number;
-  moveForce: number;
+  moveSpeed: number;
   jumpForce: number;
   maxJumpBlocks: number;
   groundNormalThreshold: number;
@@ -19,13 +19,13 @@ export interface PlayerSettings {
 
 export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   // Planet & Fysikmiljö
-  gravityStrength: 0.1,
-  frictionAir: 0.05,
+  gravityStrength: 0.001,
+  frictionAir: 0.01,
 
   // Spelarens fysikegenskaper
   density: 0.1,
-  friction: 0.1,
-  frictionStatic: 0.2,
+  friction: 0.8,
+  frictionStatic: 0.8,
   restitution: 0, // Ingen studs för att förhindra penetration
 
   // Storlek på spelaren och dess hit-box
@@ -33,8 +33,8 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   height: 16,
 
   // Rörelsevärden
-  moveForce: 0.001,
-  jumpForce: 10,
+  moveSpeed: 0.001,
+  jumpForce: 0.005,
   maxJumpBlocks: 1.5, // Spelaren hoppar maximalt 2.5 block högt över marken
 
   // Markkontakt
@@ -44,7 +44,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   groundNormalThreshold: 0.4,
 
   // Andelen av den nedåtriktade hastigheten som behålls när spelaren landar
-  landingVelocityScale: 0.5
+  landingVelocityScale: 0.5,
 };
 
 // Genererar hattexturen direkt i spelardomänen
