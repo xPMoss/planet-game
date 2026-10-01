@@ -30,24 +30,28 @@ export class CameraController {
   public update(): void {
     this.handlePinchZoom();
 
-    // Hantera kamerans fokuspunkt baserat på zoom-nivå
-    if (this.camera.zoom < 0.5) {
+    const isZoomedOut = this.camera.zoom < 0.5;
+
+    if (isZoomedOut) {
       if (this.isFollowingPlayer) {
-        // Stoppa spelarföljning och centrera kameran på planeten
+        // Koppla loss kameran mjukt utan att anropa pan() varje frame
         this.camera.stopFollow();
-        this.camera.pan(this.planet.center.x, this.planet.center.y, 200, "Linear", true);
         this.isFollowingPlayer = false;
       }
+
+      // Mjuk förskjutning mot planetens centrum manuellt per frame
+      this.camera.scrollX = Phaser.Math.Linear(this.camera.scrollX, this.planet.center.x - this.camera.width / 2, 0.05);
+      this.camera.scrollY = Phaser.Math.Linear(this.camera.scrollY, this.planet.center.y - this.camera.height / 2, 0.05);
     } else {
       if (!this.isFollowingPlayer && this.player?.sprite) {
-        // Återuppta följning av spelaren vid inzoomning
+        // Återuppta spelarföljning
         this.camera.startFollow(this.player.sprite, true, 0.1, 0.1);
         this.camera.setFollowOffset(0, 0);
         this.isFollowingPlayer = true;
       }
     }
 
-    // Rotera alltid kameran baserat på spelarens vinkel mot planetens centrum
+    // Kamera-rotation
     if (this.player?.sprite) {
       const playerPos = {
         x: this.player.sprite.x,
@@ -60,13 +64,39 @@ export class CameraController {
 
       const targetRotation = -angleToPlayer - Math.PI / 2;
       const currentRotation = camera.rotation ?? 0;
-      const newRotation = Phaser.Math.Angle.RotateTo(currentRotation, targetRotation, 0.05);
+
+      // Anpassa rotationssteg mjukt efter zoom
+      const rotationStep = Phaser.Math.Linear(0.015, 0.06, Phaser.Math.Clamp(this.camera.zoom / 1.8, 0, 1));
+
+      const newRotation = Phaser.Math.Angle.RotateTo(currentRotation, targetRotation, rotationStep);
 
       camera.setRotation(newRotation);
     }
   }
 
   private setupZoomControls(): void {
+    // Förhindra att webbläsaren zoomar hela sidan vid touch
+    this.scene.game.canvas.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      },
+      { passive: false },
+    );
+
+    this.scene.game.canvas.addEventListener(
+      "touchmove",
+      (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      },
+      { passive: false },
+    );
+
+    // Zoom via mushjul (Desktop)
     this.scene.input.on("wheel", (_pointer: Phaser.Input.Pointer, _gameObjects: unknown, _deltaX: number, deltaY: number) => {
       const zoomFactor = deltaY > 0 ? -0.15 : 0.15;
       const newZoom = Phaser.Math.Clamp(this.camera.zoom + zoomFactor, 0.3, 4);
@@ -74,7 +104,7 @@ export class CameraController {
     });
 
     this.scene.input.on("pointerup", () => {
-      if (this.scene.input.pointer1.isDown === false || this.scene.input.pointer2.isDown === false) {
+      if (!this.scene.input.pointer1.isDown || !this.scene.input.pointer2.isDown) {
         this.prevPinchDistance = 0;
       }
     });
@@ -84,12 +114,12 @@ export class CameraController {
     const pointer1 = this.scene.input.pointer1;
     const pointer2 = this.scene.input.pointer2;
 
-    if (pointer1.isDown && pointer2.isDown) {
+    if (pointer1 && pointer2 && pointer1.isDown && pointer2.isDown) {
       const currentDistance = Phaser.Math.Distance.Between(pointer1.x, pointer1.y, pointer2.x, pointer2.y);
 
       if (this.prevPinchDistance > 0) {
         const distanceDelta = currentDistance - this.prevPinchDistance;
-        const zoomFactor = distanceDelta * 0.005;
+        const zoomFactor = distanceDelta * 0.003; // Något lägre känslighet för mjukare pinch
         const newZoom = Phaser.Math.Clamp(this.camera.zoom + zoomFactor, 0.3, 4);
 
         this.camera.setZoom(newZoom);
