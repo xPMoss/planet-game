@@ -23,9 +23,9 @@ export class BuildingManager {
 
     private setupInput(): void {
         this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-            console.log("BUILD", pointer)
             // Högerklick för att placera block (pointer.rightButtonDown())
             if (!pointer.rightButtonDown()) return;
+            console.log("BUILD", pointer)
 
 
             const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);

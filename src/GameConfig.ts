@@ -3,10 +3,6 @@ import Phaser from 'phaser';
 import { MainScene } from './scenes/MainScene';
 
 export const PhysicsConfig = {
-  // Planet & Fysikmiljö
-  gravityStrength: 0.001,
-  frictionAir: 0.05,
-
   // Fysik-iterations för Matter.js (förhindrar penetration)
   positionIterations: 100, // DEFAULT 6
   velocityIterations: 100,

@@ -62,7 +62,7 @@ export class MiningManager {
                 this.mineBlock(gridX, gridY, block.type);
             }
 
-            console.log("CLICK", block)
+            //console.log("CLICK", block)
         });
     }
 

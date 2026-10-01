@@ -1,8 +1,6 @@
-import Phaser from 'phaser';
-import { SimplexNoise, type PlanetConfig } from './planetHelpers';
-import { BlockType, type BlockData } from '../types/GameTypes';
-
-
+import Phaser from "phaser";
+import { SimplexNoise, type PlanetConfig } from "./planetHelpers";
+import { BlockType, type BlockData } from "../types/GameTypes";
 
 export class Planet {
   private scene: Phaser.Scene;
@@ -23,14 +21,14 @@ export class Planet {
   }
 
   public createTextures(): void {
-    this.createBlockTexture('dirt_tile', 0x8b5a2b);
-    this.createBlockTexture('stone_tile', 0x808080);
-    this.createBlockTexture('core_tile', 0xff4500);
-    this.createBlockTexture('player_tile', 0x00ff00);
-    this.createBlockTexture('coal_tile', 0x000000);
-    this.createBlockTexture('iron_ore_tile', 0x808080);
-    this.createBlockTexture('gold_ore_tile', 0xffd700);
-    this.createBlockTexture('diamond_tile', 0x00ffff);
+    this.createBlockTexture("dirt_tile", 0x8b5a2b);
+    this.createBlockTexture("stone_tile", 0x808080);
+    this.createBlockTexture("core_tile", 0xff4500);
+    this.createBlockTexture("player_tile", 0x00ff00);
+    this.createBlockTexture("coal_tile", 0x000000);
+    this.createBlockTexture("iron_ore_tile", 0x808080);
+    this.createBlockTexture("gold_ore_tile", 0xffd700);
+    this.createBlockTexture("diamond_tile", 0x00ffff);
   }
 
   private createBlockTexture(key: string, color: number): void {
@@ -91,11 +89,11 @@ export class Planet {
 
           // Sätt klickbarhet på spriten
           image.setInteractive();
-          image.setData('gridX', x);
-          image.setData('gridY', y);
+          image.setData("gridX", x);
+          image.setData("gridY", y);
 
           const maxHp = this.getBlockMaxHp(blockType);
-          const key = x + ',' + y;
+          const key = x + "," + y;
 
           this.blocks.set(key, {
             x,
@@ -105,8 +103,6 @@ export class Planet {
             maxHp,
             body: image,
           });
-
-
         }
       }
     }
@@ -123,18 +119,18 @@ export class Planet {
   }
 
   private getTextureKey(blockType: BlockType): string {
-    if (blockType === BlockType.CORE) return 'core_tile';
-    if (blockType === BlockType.STONE) return 'stone_tile';
-    if (blockType === BlockType.IRON_ORE) return 'iron_ore_tile';
-    if (blockType === BlockType.GOLD_ORE) return 'gold_ore_tile';
-    if (blockType === BlockType.DIAMOND) return 'diamond_tile';
-    if (blockType === BlockType.COAL) return 'coal_tile';
-    return 'dirt_tile';
+    if (blockType === BlockType.CORE) return "core_tile";
+    if (blockType === BlockType.STONE) return "stone_tile";
+    if (blockType === BlockType.IRON_ORE) return "iron_ore_tile";
+    if (blockType === BlockType.GOLD_ORE) return "gold_ore_tile";
+    if (blockType === BlockType.DIAMOND) return "diamond_tile";
+    if (blockType === BlockType.COAL) return "coal_tile";
+    return "dirt_tile";
   }
 
   // REMOVE BLOCK
   public removeBlock(x: number, y: number): void {
-    const key = x + ',' + y;
+    const key = x + "," + y;
     const block = this.blocks.get(key);
 
     if (block) {
@@ -148,7 +144,7 @@ export class Planet {
 
   // PLACE BLOCK
   public placeBlock(x: number, y: number, blockType: BlockType): boolean {
-    const key = x + ',' + y;
+    const key = x + "," + y;
     if (this.blocks.has(key)) return false; // Det finns redan ett block här
 
     const blockSize = this.config.blockSize;
@@ -162,8 +158,8 @@ export class Planet {
     });
 
     image.setInteractive();
-    image.setData('gridX', x);
-    image.setData('gridY', y);
+    image.setData("gridX", x);
+    image.setData("gridY", y);
 
     const maxHp = this.getBlockMaxHp(blockType);
 
