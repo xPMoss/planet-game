@@ -29,16 +29,14 @@ export class MobileControls {
 
         this.container.innerHTML = `
         <div class="flex gap-4 items-start">
-             <button id="btn-left" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                    <i class="bi bi-caret-left"></i>
-                </button>
+            <button id="btn-left" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+                <i class="bi bi-caret-left"></i>
+            </button>
 
-                <button id="btn-right" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                    <i class="bi bi-caret-right"></i>
-                </button>
-          
-          
-      </div>
+            <button id="btn-right" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+                <i class="bi bi-caret-right"></i>
+            </button>
+        </div>
 
 
       <div class="flex flex-col justify-end gap-0">
@@ -50,7 +48,7 @@ export class MobileControls {
              
 
         <button id="btn-jump" class="self-end w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-            <i class="bi bi-circle pb-1"></i>
+            <i class="bi bi-circle"></i>
         </button>
           
           

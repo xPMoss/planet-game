@@ -19,6 +19,9 @@ export const GameConfig: Phaser.Types.Core.GameConfig = {
     default: "matter",
     matter: {
       gravity: { x: 0, y: 0 },
+      runner: {
+        fps: 60,
+      },
       positionIterations: PhysicsConfig.positionIterations,
       velocityIterations: PhysicsConfig.velocityIterations,
       constraintIterations: PhysicsConfig.constraintIterations,

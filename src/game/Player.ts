@@ -16,6 +16,7 @@ export class Player {
     private maxVelocity: number = 8;
 
     private hat!: Phaser.GameObjects.Sprite;
+    private eyesGraphics!: Phaser.GameObjects.Graphics;
     private direction: "right" | "left" | "up" | "down" = "right";
 
     // Återanvänd Vector2-objekt för att undvika Garbage Collection
@@ -39,6 +40,7 @@ export class Player {
 
         const body = this.scene.matter.bodies.rectangle(startX, startY, this.settings.width, this.settings.height, {
             friction: 0.1,
+            frictionStatic: 1,
             frictionAir: 0.01,
             restitution: 0,
             chamfer: { radius: 4 },
@@ -58,9 +60,17 @@ export class Player {
 
         this.scene.matter.world.on("collisionstart", (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
             event.pairs.forEach((pair) => {
-                //console.log("collisionstart", pair, this.sprite.body);
                 if (pair.bodyA === this.sprite.body || pair.bodyB === this.sprite.body) {
+                    // Godkänn markkontakt vid kollision
                     this.isGrounded = true;
+                }
+            });
+        });
+
+        this.scene.matter.world.on("collisionend", (event: Phaser.Physics.Matter.Events.CollisionEndEvent) => {
+            event.pairs.forEach((pair) => {
+                if (pair.bodyA === this.sprite.body || pair.bodyB === this.sprite.body) {
+                    this.isGrounded = false;
                 }
             });
         });
@@ -79,6 +89,13 @@ export class Player {
             this.hat = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_hat");
             this.hat.setOrigin(0.5, 1);
         }
+
+        // Skapa ett Graphics-objekt för ögonen
+        this.eyesGraphics = this.scene.add.graphics();
+    }
+
+    public getDirection(): "right" | "left" | "up" | "down" {
+        return this.direction;
     }
 
     public update(cursors: Phaser.Types.Input.Keyboard.CursorKeys, mobileState?: MobileInputState): void {
@@ -165,6 +182,7 @@ export class Player {
         }
 
         this.updateHatPosition();
+        this.drawEyes();
     }
 
     private updateHatPosition(): void {
@@ -183,5 +201,38 @@ export class Player {
 
         this.hat.setRotation(currentRotation);
         this.hat.setFlipX(this.direction === "left");
+    }
+
+    private drawEyes(): void {
+        if (!this.eyesGraphics || !this.sprite) return;
+
+        this.eyesGraphics.clear();
+
+        // Använd spelarens position och rotation
+        const x = this.sprite.x;
+        const y = this.sprite.y;
+        const rotation = this.sprite.rotation;
+
+        // Förskjutning för pupiller baserat på riktning
+        let pupilOffsetX = 0;
+        let pupilOffsetY = 0;
+
+        if (this.direction === "right") pupilOffsetX = 1;
+        if (this.direction === "left") pupilOffsetX = -1;
+        if (this.direction === "up") pupilOffsetY = -1;
+        if (this.direction === "down") pupilOffsetY = 1;
+
+        // Rita vita ögon
+        this.eyesGraphics.fillStyle(0xffffff, 1);
+        this.eyesGraphics.fillRect(x - 4, y - 4, 3, 4);
+        this.eyesGraphics.fillRect(x + 1, y - 4, 3, 4);
+
+        // Rita svarta pupiller som reagerar på riktningen
+        this.eyesGraphics.fillStyle(0x000000, 1);
+        this.eyesGraphics.fillRect(x - 3 + pupilOffsetX, y - 3 + pupilOffsetY, 2, 2);
+        this.eyesGraphics.fillRect(x + 2 + pupilOffsetX, y - 3 + pupilOffsetY, 2, 2);
+
+        // Sätt rotation på ögonen så de följer planetens krökning
+        this.eyesGraphics.setRotation(rotation);
     }
 }

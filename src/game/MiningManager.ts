@@ -3,6 +3,7 @@ import type { Planet } from "./Planet";
 import type { BlockType, ResourceType } from "../types/GameTypes";
 import type { Player } from "./Player";
 import { useGameStore } from "../store/useGameStore";
+import type { MobileInputState } from "../ui/MobileControls";
 
 export class MiningManager {
     private readonly scene: Phaser.Scene;
@@ -10,6 +11,10 @@ export class MiningManager {
     private readonly player: Player;
     private readonly maxMiningDistance: number = 24; // Max avstånd i pixlar för brytning
     private readonly debugGraphics: Phaser.GameObjects.Graphics;
+    private mineKey: Phaser.Input.Keyboard.Key | null = null;
+
+    private canMine: boolean = true;
+    private readonly mineCooldownMs: number = 200; // Intervall mellan slag (ms)
 
     constructor(scene: Phaser.Scene, planet: Planet, player: Player) {
         this.scene = scene;
@@ -21,7 +26,7 @@ export class MiningManager {
         this.setupInput();
     }
 
-    public update(): void {
+    public update(mobileState?: MobileInputState): void {
         this.debugGraphics.clear();
 
         // Rita endast ut cirkeln om Matter.js debug-visning är aktiv
@@ -38,9 +43,64 @@ export class MiningManager {
             this.debugGraphics.strokeCircle(playerX, playerY, this.maxMiningDistance);
             this.debugGraphics.fillCircle(playerX, playerY, this.maxMiningDistance);
         }
+
+        // Om E-tangenten hålls ned, gräv framför gubben (cooldown-hanteringen stoppar överdriven exekvering)
+        if (this.mineKey && this.mineKey.isDown) {
+            this.mineInFront();
+        }
+
+        if (mobileState && mobileState.action) {
+            this.mineInFront();
+        }
+    }
+
+    public mineInFront(): void {
+        if (!this.canMine || !this.player?.sprite) return;
+
+        const playerDirection = this.player.getDirection();
+        const bounds = this.player.sprite.getBounds();
+        const blockSize = this.planet.config.blockSize;
+
+        let targetX = this.player.sprite.x;
+        let targetY = this.player.sprite.y;
+
+        // Justera target beroende på riktning så att koordinaten hamnar rätt i griddet
+        if (playerDirection === "right") {
+            targetX = bounds.right + blockSize / 2;
+        } else if (playerDirection === "left") {
+            targetX = bounds.left - blockSize / 2;
+        } else if (playerDirection === "up") {
+            // Ta spelarens ovansida och gå ett halvt block uppåt
+            targetY = bounds.top - blockSize / 2;
+        } else if (playerDirection === "down") {
+            // Ta spelarens undersida och gå ett halvt block nedåt
+            targetY = bounds.bottom + blockSize / 2;
+        }
+
+        const gridX = Math.floor(targetX / blockSize);
+        const gridY = Math.floor(targetY / blockSize);
+        const key = gridX + "," + gridY;
+
+        const block = this.planet.blocks.get(key);
+        if (block) {
+            this.mineBlock(gridX, gridY, block.type);
+
+            this.canMine = false;
+            this.scene.time.delayedCall(this.mineCooldownMs, () => {
+                this.canMine = true;
+            });
+        }
     }
 
     private setupInput(): void {
+        if (this.scene.input.keyboard) {
+            this.mineKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+            // Kör bara en gång per knapptryck
+            this.mineKey.on("down", () => {
+                this.mineInFront();
+            });
+        }
+
         this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
             // Omvandla skärmkoordinater till spelvärldskoordinater
             const worldPoint = pointer.positionToCamera(this.scene.cameras.main) as Phaser.Math.Vector2;

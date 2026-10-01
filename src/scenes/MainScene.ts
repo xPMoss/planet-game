@@ -85,9 +85,9 @@ export class MainScene extends Phaser.Scene {
 
     this.cameraController.update();
 
-    this.miningManager.update();
+    this.miningManager.update(this.mobileControls.state);
 
     if (!this.buildingManager) return;
-    this.buildingManager.update();
+    this.buildingManager.update(this.mobileControls.state);
   }
 }

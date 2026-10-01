@@ -3,6 +3,7 @@ import { Planet } from "./Planet";
 import { BlockType, type ResourceType } from "../types/GameTypes";
 import type { Player } from "./Player";
 import { useGameStore } from "../store/useGameStore";
+import type { MobileInputState } from "../ui/MobileControls";
 
 export class BuildingManager {
     private scene: Phaser.Scene;
@@ -10,6 +11,9 @@ export class BuildingManager {
     private player: Player;
     private maxBuildDistance: number = 48;
     private readonly debugGraphics: Phaser.GameObjects.Graphics;
+
+    private canBuild: boolean = true;
+    private readonly buildCooldownMs: number = 200;
 
     constructor(scene: Phaser.Scene, planet: Planet, player: Player) {
         this.scene = scene;
@@ -24,7 +28,7 @@ export class BuildingManager {
         this.setupInput();
     }
 
-    public update(): void {
+    public update(mobileState?: MobileInputState): void {
         this.debugGraphics.clear();
 
         // Rita endast ut cirkeln om Matter.js debug-visning är aktiv
@@ -40,6 +44,59 @@ export class BuildingManager {
 
             this.debugGraphics.strokeCircle(playerX, playerY, this.maxBuildDistance);
             this.debugGraphics.fillCircle(playerX, playerY, this.maxBuildDistance);
+        }
+
+        if (mobileState && mobileState.action) {
+            this.placeInFront();
+        }
+    }
+
+    public placeInFront(): void {
+        if (!this.canBuild || !this.player?.sprite) return;
+
+        // Hämta valt resursmaterial och antal från Zustand store
+        const selectedResource = useGameStore.getState().selectedResource;
+        const inventoryCount = useGameStore.getState().inventory[selectedResource] || 0;
+
+        if (inventoryCount <= 0) return;
+
+        const blockType = this.mapResourceToBlockType(selectedResource);
+        if (blockType === null) return;
+
+        // Beräkna koordinaterna framför spelaren baserat på riktning
+        const playerDirection = this.player.getDirection();
+        const playerX = this.player.sprite.x;
+        const playerY = this.player.sprite.y;
+        const blockSize = this.planet.config.blockSize;
+
+        let targetX = playerX;
+        let targetY = playerY;
+
+        if (playerDirection === "right") targetX += blockSize;
+        else if (playerDirection === "left") targetX -= blockSize;
+        else if (playerDirection === "down") targetY += blockSize;
+        else if (playerDirection === "up") targetY -= blockSize;
+
+        const gridX = Math.floor(targetX / blockSize);
+        const gridY = Math.floor(targetY / blockSize);
+
+        const worldPoint = new Phaser.Math.Vector2(gridX * blockSize + blockSize / 2, gridY * blockSize + blockSize / 2);
+
+        // Se till att spelaren inte placerar blocket inuti sig själv
+        if (this.isOverlappingPlayer(worldPoint)) return;
+
+        // Försök placera blocket
+        const success = this.planet.placeBlock(gridX, gridY, blockType);
+
+        if (success) {
+            // Minska antalet i inventoryt
+            useGameStore.getState().removeResource(selectedResource, 1);
+
+            // Aktivera cooldown
+            this.canBuild = false;
+            this.scene.time.delayedCall(this.buildCooldownMs, () => {
+                this.canBuild = true;
+            });
         }
     }
 

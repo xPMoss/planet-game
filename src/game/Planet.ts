@@ -137,7 +137,7 @@ export class Planet {
     const blockSize = this.config.blockSize;
     const radius = this.config.radius;
     const mapSize = radius * 2;
-    const thickness = 8;
+    const thickness = 16;
     const offset = 0.5; // Förskjutning inåt
 
     // 2. Flood Fill (BFS) för att hitta yttre luft
@@ -245,8 +245,8 @@ export class Planet {
 
       const body = this.scene.matter.add.rectangle(edgeX, edgeY, edgeWidth, edgeHeight, {
         isStatic: true,
-        friction: 0.01,
-        frictionStatic: 0,
+        friction: 0.1,
+        frictionStatic: 1,
         restitution: 0,
       });
 
