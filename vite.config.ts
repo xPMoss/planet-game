@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-    plugins: [],
+    base: "/planet-game/",
     build: {
         outDir: "docs",
         emptyOutDir: true,
