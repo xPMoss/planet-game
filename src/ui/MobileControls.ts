@@ -3,6 +3,7 @@ export interface MobileInputState {
     right: boolean;
     up: boolean;
     down: boolean;
+    jump: boolean;
     action: boolean;
 }
 
@@ -13,6 +14,7 @@ export class MobileControls {
         right: false,
         up: false,
         down: false,
+        jump: false,
         action: false,
     };
 
@@ -59,7 +61,8 @@ export class MobileControls {
     private setupEvents(): void {
         this.bindButton("btn-left", "left");
         this.bindButton("btn-right", "right");
-        this.bindButton("btn-jump", "up");
+        this.bindButton("btn-jump", "jump");
+        this.bindButton("btn-up", "up");
         this.bindButton("btn-action", "action");
     }
 

@@ -3,6 +3,19 @@ import { Planet } from "./Planet";
 import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture } from "./playerHelpers";
 import type { MobileInputState } from "../ui/MobileControls";
 
+type Directions = {
+    tangentX: number;
+    tangentY: number;
+    currentVelocity: Phaser.Math.Vector2 | MatterJS.Vector;
+    dirX: number;
+    dirY: number;
+    dx: number;
+    dy: number;
+    upX: number;
+    upY: number;
+    distanceToPlanetCenter: number;
+};
+
 export class Player {
     private scene: Phaser.Scene;
     private planet: Planet;
@@ -116,73 +129,92 @@ export class Player {
             });
         }
 
-        const playerPos = this.sprite.body.position;
-        const center = this.planet.center;
-
-        // 1. Beräkna riktningsvektor mot centrum
-        const dx = center.x - playerPos.x;
-        const dy = center.y - playerPos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance === 0) return;
-
-        // Enhetsvektor riktad mot centrum
-        const dirX = dx / distance;
-        const dirY = dy / distance;
-
-        // Applicera konstant gravitation mot centrum
-        this.gravityVector.set(dirX * this.gravityStrength, dirY * this.gravityStrength);
-        this.sprite.applyForce(this.gravityVector);
-
-        // Beräkna kontinuerlig vinkel mot centrum
-        const rawAngle = Math.atan2(dy, dx) - Math.PI / 2;
-        // Snappa till närmaste 90-graderssteg (PI / 2 radianer)
-        const snapAngle = Math.round(rawAngle / (Math.PI / 2)) * (Math.PI / 2);
-        this.sprite.setRotation(snapAngle);
-
-        // Tangentiell rörelse (Vänster / Höger)
-        const tangentX = dirY;
-        const tangentY = -dirX;
-
-        const currentVel = this.sprite.body.velocity;
+        const directions = this.calculateDirections()!;
+        if (directions.distanceToPlanetCenter === 0) return;
+        this.applyGravity(directions);
         const targetSpeed = 4; // Önskad rörelsehastighet
 
-        const isLeft = cursors.left.isDown || Boolean(mobileState?.left);
-        const isRight = cursors.right.isDown || Boolean(mobileState?.right);
-        const isDown = cursors.down.isDown || Boolean(mobileState?.down);
-        const isUp = cursors.space.isDown || Phaser.Input.Keyboard.JustDown(cursors.up) || Boolean(mobileState?.up);
-
-        if (isLeft) {
+        if (cursors.left.isDown || Boolean(mobileState?.left)) {
             // Bevara befintlig hastighet mot/från centrum, men sätt tangenten
-            this.sprite.setVelocity(-tangentX * targetSpeed + currentVel.x * 0.1, -tangentY * targetSpeed + currentVel.y * 0.1);
+            this.sprite.setVelocity(
+                -directions.tangentX * targetSpeed + directions.currentVelocity.x * 0.1,
+                -directions.tangentY * targetSpeed + directions.currentVelocity.y * 0.1,
+            );
             this.direction = "left";
         }
 
-        if (isRight) {
-            this.sprite.setVelocity(tangentX * targetSpeed + currentVel.x * 0.1, tangentY * targetSpeed + currentVel.y * 0.1);
+        if (cursors.right.isDown || Boolean(mobileState?.right)) {
+            this.sprite.setVelocity(
+                directions.tangentX * targetSpeed + directions.currentVelocity.x * 0.1,
+                directions.tangentY * targetSpeed + directions.currentVelocity.y * 0.1,
+            );
             this.direction = "right";
         }
 
-        if (isDown) {
+        if (cursors.down.isDown || Boolean(mobileState?.down)) {
             this.direction = "down";
         }
 
-        if (isUp && this.isGrounded) {
+        if (cursors.up.isDown || Boolean(mobileState?.up)) {
+            this.direction = "up";
+        }
+
+        const isJump = cursors.space.isDown || Boolean(mobileState?.jump);
+        if (isJump && this.isGrounded) {
             const jumpSpeed = 16;
 
-            // Beräkna riktningen "upp" utifrån spelarens egen rotation
-            // (Inom Phaser/Math motsvarar sprite.rotation - Math.PI / 2 riktningen rakt upp från spriten)
-            const upX = Math.cos(this.sprite.rotation - Math.PI / 2);
-            const upY = Math.sin(this.sprite.rotation - Math.PI / 2);
-
             // Sätt hastigheten exakt i spelarens uppåt-riktning
-            this.sprite.setVelocity(upX * jumpSpeed, upY * jumpSpeed);
+            this.sprite.setVelocity(directions.upX * jumpSpeed, directions.upY * jumpSpeed);
 
             this.isGrounded = false;
         }
 
         this.updateHatPosition();
         this.drawEyes();
+    }
+
+    private applyGravity(directions: Directions): void {
+        if (!this.sprite.body) return;
+
+        // Applicera konstant gravitation mot centrum
+        this.gravityVector.set(-directions.upX * this.gravityStrength, -directions.upY * this.gravityStrength);
+        //this.gravityVector.set(directions.dirX * this.gravityStrength, directions.dirY * this.gravityStrength);
+        this.sprite.applyForce(this.gravityVector);
+
+        // Beräkna kontinuerlig vinkel mot centrum
+        const rawAngle = Math.atan2(directions.dy, directions.dx) - Math.PI / 2;
+        // Snappa till närmaste 90-graderssteg (PI / 2 radianer)
+        const snapAngle = Math.round(rawAngle / (Math.PI / 2)) * (Math.PI / 2);
+        this.sprite.setRotation(snapAngle);
+    }
+
+    private calculateDirections(): Directions | undefined {
+        if (!this.sprite.body) return;
+
+        const playerPos = this.sprite.body.position;
+        const planetCenter = this.planet.center;
+
+        // Beräkna riktningsvektor mot planetens centrum
+        const dx = planetCenter.x - playerPos.x;
+        const dy = planetCenter.y - playerPos.y;
+        const distanceToPlanetCenter = Math.sqrt(dx * dx + dy * dy);
+
+        // Enhetsvektor riktad mot planetens centrum
+        const dirX = dx / distanceToPlanetCenter;
+        const dirY = dy / distanceToPlanetCenter;
+
+        // Tangentiell rörelse (Vänster / Höger)
+        const tangentX = dirY;
+        const tangentY = -dirX;
+
+        const currentVelocity = this.sprite.body.velocity;
+
+        // Beräkna riktningen "upp" utifrån spelarens egen rotation
+        // (Inom Phaser/Math motsvarar sprite.rotation - Math.PI / 2 riktningen rakt upp från spriten)
+        const upX = Math.cos(this.sprite.rotation - Math.PI / 2);
+        const upY = Math.sin(this.sprite.rotation - Math.PI / 2);
+
+        return { tangentX, tangentY, currentVelocity, dirX, dirY, dx, dy, upX, upY, distanceToPlanetCenter };
     }
 
     private updateHatPosition(): void {

@@ -57,6 +57,7 @@ export class MainScene extends Phaser.Scene {
     debugConfig.lineColor = 0xffff00; // Gul linje runt spelaren
     debugConfig.lineOpacity = 1.0;
 
+    //
     this.planet.generate();
 
     this.player = new Player(this, this.planet);
@@ -79,15 +80,12 @@ export class MainScene extends Phaser.Scene {
   }
 
   override update(): void {
-    if (!this.player || !this.miningManager) return;
+    if (!this.player || !this.miningManager || !this.buildingManager) return;
 
     this.player.update(this.cursors, this.mobileControls.state);
-
     this.cameraController.update();
 
     this.miningManager.update(this.mobileControls.state);
-
-    if (!this.buildingManager) return;
     this.buildingManager.update(this.mobileControls.state);
   }
 }
