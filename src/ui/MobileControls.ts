@@ -33,11 +33,11 @@ export class MobileControls {
 
         this.container.innerHTML = `
         <div class="flex gap-4 items-start">
-            <button id="btn-left" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+            <button id="btn-left" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
                 <i class="bi bi-caret-left"></i>
             </button>
 
-            <button id="btn-right" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+            <button id="btn-right" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
                 <i class="bi bi-caret-right"></i>
             </button>
         </div>
@@ -45,16 +45,17 @@ export class MobileControls {
 
       <div class="flex flex-col justify-end gap-0">
         <span class="flex gap-4 pe-0"> 
-            <button id="btn-primaryAction" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+          
+                <button id="btn-secondaryAction" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
                     <i class="bi bi-plus"></i>
                 </button>
-                <button id="btn-secondaryAction" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+                  <button id="btn-primaryAction" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
                     <i class="bi bi-x"></i>
                 </button>
         </span>
              
         <span class="mx-auto">
-        <button id="btn-jump" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+        <button id="btn-jump" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
             <i class="bi bi-circle"></i>
         </button>
           </span>
@@ -69,7 +70,7 @@ export class MobileControls {
         this.bindButton("btn-jump", "jump");
         this.bindButton("btn-up", "up");
         this.bindButton("btn-primaryAction", "primaryAction");
-        this.bindButton("btn-secondary", "secondaryAction");
+        this.bindButton("btn-secondaryAction", "secondaryAction");
     }
 
     private bindButton(id: string, key: keyof MobileInputState): void {

@@ -12,6 +12,9 @@ export class BuildingManager {
     private maxBuildDistance: number = 48;
     private readonly debugGraphics: Phaser.GameObjects.Graphics;
 
+    // Grafik-instans för bygg-markören
+    private highlightGraphics: Phaser.GameObjects.Graphics;
+
     private canBuild: boolean = true;
     private readonly buildCooldownMs: number = 200;
 
@@ -25,11 +28,18 @@ export class BuildingManager {
 
         this.debugGraphics = this.scene.add.graphics();
 
+        // Skapa grafikobjekt för bygg-highlight med högre depth
+        this.highlightGraphics = this.scene.add.graphics();
+        this.highlightGraphics.setDepth(20);
+
         this.setupInput();
     }
 
     public update(mobileState?: MobileInputState): void {
         this.debugGraphics.clear();
+
+        // Uppdatera byggmarkören varje frame
+        this.updateTargetHighlight();
 
         // Rita endast ut cirkeln om Matter.js debug-visning är aktiv
         const isDebugActive = this.scene.matter.world.drawDebug;
@@ -38,7 +48,7 @@ export class BuildingManager {
             const playerX = this.player.sprite.x;
             const playerY = this.player.sprite.y;
 
-            // Grön halvtransparent cirkel för mining-sradie
+            // Grön halvtransparent cirkel för räckvidd
             this.debugGraphics.lineStyle(2, 0xffff00, 0.8);
             this.debugGraphics.fillStyle(0xffff00, 0.1);
 
@@ -63,30 +73,17 @@ export class BuildingManager {
         const blockType = this.mapResourceToBlockType(selectedResource);
         if (blockType === null) return;
 
-        // Beräkna koordinaterna framför spelaren baserat på riktning
-        const playerDirection = this.player.getDirection();
-        const playerX = this.player.sprite.x;
-        const playerY = this.player.sprite.y;
+        const target = this.getTargetGridPosition();
+        if (!target) return;
+
         const blockSize = this.planet.config.blockSize;
-
-        let targetX = playerX;
-        let targetY = playerY;
-
-        if (playerDirection === "right") targetX += blockSize;
-        else if (playerDirection === "left") targetX -= blockSize;
-        else if (playerDirection === "down") targetY += blockSize;
-        else if (playerDirection === "up") targetY -= blockSize;
-
-        const gridX = Math.floor(targetX / blockSize);
-        const gridY = Math.floor(targetY / blockSize);
-
-        const worldPoint = new Phaser.Math.Vector2(gridX * blockSize + blockSize / 2, gridY * blockSize + blockSize / 2);
+        const worldPoint = new Phaser.Math.Vector2(target.gridX * blockSize + blockSize / 2, target.gridY * blockSize + blockSize / 2);
 
         // Se till att spelaren inte placerar blocket inuti sig själv
         if (this.isOverlappingPlayer(worldPoint)) return;
 
         // Försök placera blocket
-        const success = this.planet.placeBlock(gridX, gridY, blockType);
+        const success = this.planet.placeBlock(target.gridX, target.gridY, blockType);
 
         if (success) {
             // Minska antalet i inventoryt
@@ -100,26 +97,49 @@ export class BuildingManager {
         }
     }
 
+    private updateTargetHighlight(): void {
+        this.highlightGraphics.clear();
+
+        const target = this.getTargetGridPosition();
+        if (!target) return;
+
+        const selectedResource = useGameStore.getState().selectedResource;
+        const inventoryCount = useGameStore.getState().inventory[selectedResource] || 0;
+
+        const blockSize = this.planet.config.blockSize;
+        const worldX = target.gridX * blockSize;
+        const worldY = target.gridY * blockSize;
+
+        const worldPoint = new Phaser.Math.Vector2(worldX + blockSize / 2, worldY + blockSize / 2);
+
+        const isOverlapping = this.isOverlappingPlayer(worldPoint);
+        const hasResources = inventoryCount > 0;
+
+        // Byt färg baserat på om placering är tillåten (Grön = OK, Röd = Ogiltig/Tomt lager)
+        const color = hasResources && !isOverlapping ? 0x00ff00 : 0xff0000;
+
+        this.highlightGraphics.lineStyle(2, color, 0.9);
+        this.highlightGraphics.fillStyle(color, 0.2);
+
+        this.highlightGraphics.strokeRect(worldX, worldY, blockSize, blockSize);
+        this.highlightGraphics.fillRect(worldX, worldY, blockSize, blockSize);
+    }
+
     private setupInput(): void {
         this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-            // Högerklick för att placera block (pointer.rightButtonDown())
             if (!pointer.rightButtonDown()) return;
-            console.log("BUILD", pointer);
 
             const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
             const playerPos = new Phaser.Math.Vector2(this.player.sprite.x, this.player.sprite.y);
 
-            // Avståndskontroll
             if (playerPos.distance(worldPoint) > this.maxBuildDistance) return;
 
             const gridX = Math.floor(worldPoint.x / this.planet.config.blockSize);
             const gridY = Math.floor(worldPoint.y / this.planet.config.blockSize);
 
-            // Kontrollera att spelaren inte placerar blocket inuti sin egen hitbox
             if (this.isOverlappingPlayer(worldPoint)) return;
 
-            // Hämta valt block/resurs från Zustand store
-            const selectedResource = useGameStore.getState().selectedResource; // e.g. 'dirt'
+            const selectedResource = useGameStore.getState().selectedResource;
             const inventoryCount = useGameStore.getState().inventory[selectedResource] || 0;
 
             if (inventoryCount <= 0) return;
@@ -127,11 +147,9 @@ export class BuildingManager {
             const blockType = this.mapResourceToBlockType(selectedResource);
             if (blockType === null) return;
 
-            // Försök placera blocket i planeten
             const success = this.planet.placeBlock(gridX, gridY, blockType);
 
             if (success) {
-                // Minska antalet i inventoryt
                 useGameStore.getState().removeResource(selectedResource, 1);
             }
         });
@@ -151,5 +169,44 @@ export class BuildingManager {
         if (resource === "gold_ore") return BlockType.GOLD_ORE;
         if (resource === "diamond") return BlockType.DIAMOND;
         return null;
+    }
+
+    private getTargetGridPosition(): { gridX: number; gridY: number } | null {
+        if (!this.player?.sprite) return null;
+
+        const blockSize = this.planet.config.blockSize;
+        const playerDirection = this.player.getDirection();
+        const rotation = this.player.sprite.rotation;
+
+        const upX = Math.cos(rotation - Math.PI / 2);
+        const upY = Math.sin(rotation - Math.PI / 2);
+
+        const rightX = -upY;
+        const rightY = upX;
+
+        let dirX = 0;
+        let dirY = 0;
+
+        if (playerDirection === "right") {
+            dirX = rightX;
+            dirY = rightY;
+        } else if (playerDirection === "left") {
+            dirX = -rightX;
+            dirY = -rightY;
+        } else if (playerDirection === "up") {
+            dirX = upX;
+            dirY = upY;
+        } else if (playerDirection === "down") {
+            dirX = -upX;
+            dirY = -upY;
+        }
+
+        const targetX = this.player.sprite.x + dirX * blockSize;
+        const targetY = this.player.sprite.y + dirY * blockSize;
+
+        return {
+            gridX: Math.floor(targetX / blockSize),
+            gridY: Math.floor(targetY / blockSize),
+        };
     }
 }

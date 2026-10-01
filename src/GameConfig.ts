@@ -10,11 +10,15 @@ export const PhysicsConfig = {
 
 export const GameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 390,
-  height: 844,
   parent: "game-container",
   backgroundColor: "#1a1a2e",
   disableContextMenu: true,
+  scale: {
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: "100%",
+    height: "100%",
+  },
   physics: {
     default: "matter",
     matter: {
