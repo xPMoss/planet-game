@@ -46,7 +46,7 @@ export class BuildingManager {
             this.debugGraphics.fillCircle(playerX, playerY, this.maxBuildDistance);
         }
 
-        if (mobileState && mobileState.action) {
+        if (mobileState && mobileState.secondaryAction) {
             this.placeInFront();
         }
     }

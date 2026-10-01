@@ -76,6 +76,13 @@ export class MainScene extends Phaser.Scene {
 
     this.mobileControls = new MobileControls();
 
+    // Registrera event-lyssnare här!
+    this.events.on("planet-cleared", () => {
+      console.log("Hela planeten är utgrävd förutom kärnan!");
+
+      // Här kan du t.ex. starta nästa bana, ge poäng eller visa en Vinst-UI
+    });
+
     console.log("MainScene.create()", this.planet.blocks);
   }
 

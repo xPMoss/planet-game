@@ -240,10 +240,9 @@ export class Player {
 
         this.eyesGraphics.clear();
 
-        // Använd spelarens position och rotation
-        const x = this.sprite.x;
-        const y = this.sprite.y;
-        const rotation = this.sprite.rotation;
+        // Sätt grafikobjektets position och rotation direkt på spelarens sprite
+        this.eyesGraphics.setPosition(this.sprite.x, this.sprite.y);
+        this.eyesGraphics.setRotation(this.sprite.rotation);
 
         // Förskjutning för pupiller baserat på riktning
         let pupilOffsetX = 0;
@@ -254,17 +253,14 @@ export class Player {
         if (this.direction === "up") pupilOffsetY = -1;
         if (this.direction === "down") pupilOffsetY = 1;
 
-        // Rita vita ögon
+        // Rita vita ögon i lokala koordinater (där (0,0) är spelarens mittpunkt)
         this.eyesGraphics.fillStyle(0xffffff, 1);
-        this.eyesGraphics.fillRect(x - 4, y - 4, 3, 4);
-        this.eyesGraphics.fillRect(x + 1, y - 4, 3, 4);
+        this.eyesGraphics.fillRect(-4, -4, 3, 4);
+        this.eyesGraphics.fillRect(1, -4, 3, 4);
 
-        // Rita svarta pupiller som reagerar på riktningen
+        // Rita svarta pupiller i lokala koordinater
         this.eyesGraphics.fillStyle(0x000000, 1);
-        this.eyesGraphics.fillRect(x - 3 + pupilOffsetX, y - 3 + pupilOffsetY, 2, 2);
-        this.eyesGraphics.fillRect(x + 2 + pupilOffsetX, y - 3 + pupilOffsetY, 2, 2);
-
-        // Sätt rotation på ögonen så de följer planetens krökning
-        this.eyesGraphics.setRotation(rotation);
+        this.eyesGraphics.fillRect(-3 + pupilOffsetX, -3 + pupilOffsetY, 2, 2);
+        this.eyesGraphics.fillRect(2 + pupilOffsetX, -3 + pupilOffsetY, 2, 2);
     }
 }

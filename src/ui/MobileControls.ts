@@ -4,7 +4,8 @@ export interface MobileInputState {
     up: boolean;
     down: boolean;
     jump: boolean;
-    action: boolean;
+    primaryAction: boolean;
+    secondaryAction: boolean;
 }
 
 export class MobileControls {
@@ -15,7 +16,8 @@ export class MobileControls {
         up: false,
         down: false,
         jump: false,
-        action: false,
+        primaryAction: false,
+        secondaryAction: false,
     };
 
     constructor() {
@@ -42,17 +44,20 @@ export class MobileControls {
 
 
       <div class="flex flex-col justify-end gap-0">
-        <span class="pe-12"> 
-            <button id="btn-action" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+        <span class="flex gap-4 pe-0"> 
+            <button id="btn-primaryAction" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+                    <i class="bi bi-plus"></i>
+                </button>
+                <button id="btn-secondaryAction" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
                     <i class="bi bi-x"></i>
                 </button>
         </span>
              
-
-        <button id="btn-jump" class="self-end w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
+        <span class="mx-auto">
+        <button id="btn-jump" class="w-16 h-16 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
             <i class="bi bi-circle"></i>
         </button>
-          
+          </span>
           
       </div>
     `;
@@ -63,7 +68,8 @@ export class MobileControls {
         this.bindButton("btn-right", "right");
         this.bindButton("btn-jump", "jump");
         this.bindButton("btn-up", "up");
-        this.bindButton("btn-action", "action");
+        this.bindButton("btn-primaryAction", "primaryAction");
+        this.bindButton("btn-secondary", "secondaryAction");
     }
 
     private bindButton(id: string, key: keyof MobileInputState): void {

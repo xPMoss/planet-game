@@ -51,7 +51,7 @@ export class MiningManager {
             this.mineInFront();
         }
 
-        if (mobileState && mobileState.action) {
+        if (mobileState && mobileState.primaryAction) {
             this.mineInFront();
         }
     }
@@ -59,32 +59,14 @@ export class MiningManager {
     public mineInFront(): void {
         if (!this.canMine || !this.player?.sprite) return;
 
-        const playerDirection = this.player.getDirection();
-        const playerX = this.player.sprite.x;
-        const playerY = this.player.sprite.y;
-        const blockSize = this.planet.config.blockSize;
+        const target = this.getTargetGridPosition();
+        if (!target) return;
 
-        let targetX = playerX;
-        let targetY = playerY;
-
-        // Lägg på ett helt block i den riktning spelaren tittar
-        if (playerDirection === "right") {
-            targetX = playerX + blockSize;
-        } else if (playerDirection === "left") {
-            targetX = playerX - blockSize;
-        } else if (playerDirection === "up") {
-            targetY = playerY - blockSize;
-        } else if (playerDirection === "down") {
-            targetY = playerY + blockSize;
-        }
-
-        const gridX = Math.floor(targetX / blockSize);
-        const gridY = Math.floor(targetY / blockSize);
-        const key = gridX + "," + gridY;
-
+        const key = target.gridX + "," + target.gridY;
         const block = this.planet.blocks.get(key);
+
         if (block) {
-            this.mineBlock(gridX, gridY, block.type);
+            this.mineBlock(target.gridX, target.gridY, block.type);
 
             this.canMine = false;
             this.scene.time.delayedCall(this.mineCooldownMs, () => {
@@ -164,43 +146,68 @@ export class MiningManager {
         if (type === 5) return "diamond";
         return null;
     }
-
     private updateTargetHighlight(): void {
         this.highlightGraphics.clear();
 
-        if (!this.player?.sprite) return;
+        const target = this.getTargetGridPosition();
+        if (!target) return;
 
-        const playerDirection = this.player.getDirection();
-        const playerX = this.player.sprite.x;
-        const playerY = this.player.sprite.y;
-        const blockSize = this.planet.config.blockSize;
-
-        let targetX = playerX;
-        let targetY = playerY;
-
-        if (playerDirection === "right") targetX += blockSize;
-        else if (playerDirection === "left") targetX -= blockSize;
-        else if (playerDirection === "up") targetY -= blockSize;
-        else if (playerDirection === "down") targetY += blockSize;
-
-        const gridX = Math.floor(targetX / blockSize);
-        const gridY = Math.floor(targetY / blockSize);
-        const key = gridX + "," + gridY;
-
-        // Finns det ett block på målpositionen?
+        const key = target.gridX + "," + target.gridY;
         const block = this.planet.blocks.get(key);
 
         if (block) {
-            const worldX = gridX * blockSize;
-            const worldY = gridY * blockSize;
+            const blockSize = this.planet.config.blockSize;
+            const worldX = target.gridX * blockSize;
+            const worldY = target.gridY * blockSize;
 
-            // Rita en gul/vit semitransparent ram runt blocket
             this.highlightGraphics.lineStyle(2, 0xffff00, 0.9);
             this.highlightGraphics.fillStyle(0xffff00, 0.2);
 
             this.highlightGraphics.strokeRect(worldX, worldY, blockSize, blockSize);
             this.highlightGraphics.fillRect(worldX, worldY, blockSize, blockSize);
         }
+    }
+
+    private getTargetGridPosition(): { gridX: number; gridY: number } | null {
+        if (!this.player?.sprite) return null;
+
+        const blockSize = this.planet.config.blockSize;
+        const playerDirection = this.player.getDirection();
+        const rotation = this.player.sprite.rotation;
+
+        // Vektorer för spelarens lokala riktningar utifrån rotation
+        // "upp" relativt spelarens fötter/kropp
+        const upX = Math.cos(rotation - Math.PI / 2);
+        const upY = Math.sin(rotation - Math.PI / 2);
+
+        // "höger" relativt spelarens kropp
+        const rightX = -upY;
+        const rightY = upX;
+
+        let dirX = 0;
+        let dirY = 0;
+
+        if (playerDirection === "right") {
+            dirX = rightX;
+            dirY = rightY;
+        } else if (playerDirection === "left") {
+            dirX = -rightX;
+            dirY = -rightY;
+        } else if (playerDirection === "up") {
+            dirX = upX;
+            dirY = upY;
+        } else if (playerDirection === "down") {
+            dirX = -upX;
+            dirY = -upY;
+        }
+
+        const targetX = this.player.sprite.x + dirX * blockSize;
+        const targetY = this.player.sprite.y + dirY * blockSize;
+
+        return {
+            gridX: Math.floor(targetX / blockSize),
+            gridY: Math.floor(targetY / blockSize),
+        };
     }
 
     private updateDebugGraphics(): void {
@@ -218,7 +225,12 @@ export class MiningManager {
             this.debugText.setText("DIR: " + direction);
             this.debugText.setVisible(true);
 
-            // ... övriga cirklar och linjer i debugGraphics ...
+            // Grön halvtransparent cirkel för mining-sradie
+            this.debugGraphics.lineStyle(2, 0x00ff00, 0.8);
+            this.debugGraphics.fillStyle(0x00ff00, 0.1);
+
+            this.debugGraphics.strokeCircle(playerX, playerY, this.maxMiningDistance);
+            this.debugGraphics.fillCircle(playerX, playerY, this.maxMiningDistance);
         } else {
             this.debugText.setVisible(false);
         }
