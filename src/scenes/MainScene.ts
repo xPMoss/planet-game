@@ -60,7 +60,7 @@ export class MainScene extends Phaser.Scene {
     // UI
     this.mobileControls = document.createElement("controls-ui") as MobileControls;
     //document.body.prepend(this.mobileControls);
-    this.joystick = new VirtualJoystick(this, 150, 575, 40);
+    this.joystick = new VirtualJoystick(this, 150, 500, 40);
 
     this.header = document.createElement("header-ui") as Header;
     document.body.prepend(this.header);
