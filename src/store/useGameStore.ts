@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ResourceType, ToolType, Tool } from "../types/GameTypes";
+import type { ResourceType, ToolType, Tool } from "types";
 
 interface GameState {
     inventory: Record<ResourceType, number>;

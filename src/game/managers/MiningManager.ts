@@ -1,24 +1,25 @@
 import Phaser from "phaser";
-import type { Planet } from "./Planet";
-import type { BlockType, ResourceType } from "../types/GameTypes";
-import type { Player } from "./Player";
-import { useGameStore } from "../store/useGameStore";
-import type { MobileInputState } from "../ui/MobileControls";
-import type { HighlightManager } from "./HighlightManager";
+import type { Planet } from "planet";
+import type { BlockType, ResourceType } from "src/types/GameTypes";
+import type { Player } from "player";
+import { useGameStore } from "src/store/useGameStore";
+import type { MobileInputState } from "ui";
+import type { HighlightManager } from "managers";
 
 export class MiningManager {
+    private debugGraphics!: Phaser.GameObjects.Graphics;
+    private debugText!: Phaser.GameObjects.Text;
+
     private readonly scene: Phaser.Scene;
     private readonly planet: Planet;
     private readonly player: Player;
     private readonly highlightManager: HighlightManager;
     private readonly maxMiningDistance: number = 24;
-    private readonly debugGraphics: Phaser.GameObjects.Graphics;
+
     private mineKey: Phaser.Input.Keyboard.Key | null = null;
 
     private canMine: boolean = true;
     private readonly mineCooldownMs: number = 200;
-
-    private debugText!: Phaser.GameObjects.Text;
 
     constructor(scene: Phaser.Scene, planet: Planet, player: Player, highlightManager: HighlightManager) {
         this.scene = scene;
@@ -28,14 +29,7 @@ export class MiningManager {
 
         this.setupInput();
 
-        this.debugGraphics = this.scene.add.graphics();
-        this.debugText = this.scene.add.text(0, 0, "", {
-            fontFamily: "monospace",
-            fontSize: "12px",
-            color: "#ffffff",
-            backgroundColor: "#00000088",
-        });
-        this.debugText.setDepth(100);
+        this.createDebug();
     }
 
     public update(mobileState?: MobileInputState): void {
@@ -128,6 +122,16 @@ export class MiningManager {
         if (type === 5) return "diamond";
         return null;
     }
+    private createDebug() {
+        this.debugGraphics = this.scene.add.graphics();
+        this.debugText = this.scene.add.text(0, 0, "", {
+            fontFamily: "monospace",
+            fontSize: "12px",
+            color: "#ffffff",
+            backgroundColor: "#00000088",
+        });
+        this.debugText.setDepth(100);
+    }
 
     private updateDebugGraphics(): void {
         this.debugGraphics.clear();
@@ -137,11 +141,6 @@ export class MiningManager {
         if (isDebugActive && this.player?.sprite) {
             const playerX = this.player.sprite.x;
             const playerY = this.player.sprite.y;
-            const direction = this.player.getDirection();
-
-            this.debugText.setPosition(playerX - 20, playerY - 30);
-            this.debugText.setText("DIR: " + direction);
-            this.debugText.setVisible(true);
 
             this.debugGraphics.lineStyle(2, 0x00ff00, 0.8);
             this.debugGraphics.fillStyle(0x00ff00, 0.1);

@@ -1,7 +1,7 @@
 // Planet.ts
 import Phaser from "phaser";
+import { BlockType, type BlockData } from "types";
 import { SimplexNoise, type PlanetConfig } from "./planetHelpers";
-import { BlockType, type BlockData } from "../types/GameTypes";
 import { PlanetOutline } from "./planetOutline";
 
 export class Planet {
@@ -11,9 +11,6 @@ export class Planet {
   private noise: SimplexNoise = new SimplexNoise();
   public blocks: Map<string, BlockData> = new Map();
   private outline!: PlanetOutline;
-
-  private outlineGraphics?: Phaser.GameObjects.Graphics;
-  private outlineBodies: MatterJS.BodyType[] = [];
 
   constructor(scene: Phaser.Scene, config: PlanetConfig) {
     this.scene = scene;
@@ -40,12 +37,18 @@ export class Planet {
   }
 
   private createBlockTexture(key: string, color: number): void {
+    // Högre texturupplösning för skarpa block
+    const textureSize = 64;
+
     const graphics = this.scene.make.graphics({ x: 0, y: 0 });
     graphics.fillStyle(color, 1);
-    graphics.fillRect(0, 0, this.config.blockSize, this.config.blockSize);
-    graphics.lineStyle(1, 0x000000, 0.2);
-    graphics.strokeRect(0, 0, this.config.blockSize, this.config.blockSize);
-    graphics.generateTexture(key, this.config.blockSize, this.config.blockSize);
+    graphics.fillRect(0, 0, textureSize, textureSize);
+
+    const strokeWidth = Math.max(1, textureSize / this.config.blockSize);
+    graphics.lineStyle(strokeWidth, 0x000000, 0.2);
+    graphics.strokeRect(0, 0, textureSize, textureSize);
+
+    graphics.generateTexture(key, textureSize, textureSize);
     graphics.destroy();
   }
 
@@ -90,6 +93,7 @@ export class Planet {
           const textureKey = this.getTextureKey(blockType);
 
           const image = this.scene.add.image(worldX, worldY, textureKey);
+          image.setDisplaySize(blockSize, blockSize);
 
           image.setInteractive();
           image.setData("gridX", x);
@@ -181,6 +185,7 @@ export class Planet {
       isStatic: true,
       friction: 0.1,
     });
+    image.setDisplaySize(blockSize, blockSize);
 
     image.setInteractive();
     image.setData("gridX", x);

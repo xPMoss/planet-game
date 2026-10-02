@@ -23,7 +23,20 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    "paths": {
+      "@/*": ["./src/*"],
+      "src/*": ["./src/*"],
+      "camera": ["./src/game/camera"],
+      "managers": ["./src/game/managers"],
+      "player": ["./src/game/player"],
+      "planet": ["./src/game/planet"],
+      "scenes": ["./src/scenes"],
+      "ui": ["./src/ui"],
+      "store": ["./src/store/*"],
+      "types": ["./src/types"],
+    },
   },
-  "include": ["src"]
+  "include": ["src"],
 }

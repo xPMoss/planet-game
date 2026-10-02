@@ -2,7 +2,7 @@
 import Phaser from "phaser";
 import type { Planet } from "./Planet";
 import { PlanetOptimizer } from "./planetOptimizer";
-import { BlockType } from "../types/GameTypes";
+import { BlockType } from "types";
 
 export class PlanetOutline {
     private scene: Phaser.Scene;
@@ -17,7 +17,7 @@ export class PlanetOutline {
         this.optimizer = new PlanetOptimizer(scene, planet);
     }
 
-    public draw(depth: number = 2): void {
+    public draw(depth: number = 3): void {
         if (this.outlineGraphics) {
             this.outlineGraphics.clear();
         } else {

@@ -8,8 +8,7 @@ export interface MobileInputState {
     secondaryAction: boolean;
 }
 
-export class MobileControls {
-    private container: HTMLElement | null;
+export class MobileControls extends HTMLElement {
     public state: MobileInputState = {
         left: false,
         right: false,
@@ -21,57 +20,134 @@ export class MobileControls {
     };
 
     constructor() {
-        this.container = document.getElementById("mobile-controls");
-        this.render();
+        super();
+    }
+
+    connectedCallback() {
+        this.id = "mobile-controls-container";
+
+        this.setupStyles();
+        this.createDomElements();
         this.setupEvents();
     }
 
-    private render(): void {
-        if (!this.container) return;
+    private setupStyles(): void {
+        this.classList.add(
+            "absolute",
+            "bottom-0",
+            "w-full",
+            "flex",
+            "justify-between",
+            "items-center",
+            "text-4xl",
+            "pointer-events-none",
+            "z-10",
+        );
+    }
 
-        this.container.className = "absolute bottom-0 w-full flex justify-between items-center text-4xl p-4 pointer-events-none z-10";
+    private createDomElements(): void {
+        const leftContainer = this.createContainer("btn-container-left", 3, 3);
+        const rightContainer = this.createContainer("btn-container-right", 2, 2);
 
-        this.container.innerHTML = `
-        <div class="flex flex-col justify-between gap-0 items-start">
-                <button id="btn-up" class="mx-auto w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                <i class="bi bi-caret-up"></i>
-              </button>
-          
-            <span class="flex gap-4">
-                 <button id="btn-left" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                    <i class="bi bi-caret-left"></i>
-                    </button>
-                <button id="btn-right" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                    <i class="bi bi-caret-right"></i>
-                </button>
-            </span>
-       
+        this.appendChild(leftContainer);
+        this.appendChild(rightContainer);
 
-            <button id="btn-down" class="mx-auto w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                <i class="bi bi-caret-down"></i>
-            </button>
-        </div>
+        const emptyPlaceholder = this.createButton("empty", "", 0, 0);
+        const emptyPlaceholder1 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
+        const emptyPlaceholder2 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
+        const emptyPlaceholder3 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
+        const emptyPlaceholder4 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
+        const emptyPlaceholder5 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
 
+        const upButton = this.createButton("btn-up", "bi-caret-up", 0, 1);
+        const leftButton = this.createButton("btn-left", "bi-caret-left", 1, 0);
+        const rightButton = this.createButton("btn-right", "bi-caret-right", 1, 2);
+        const downButton = this.createButton("btn-down", "bi-caret-down", 2, 1);
 
-      <div class="flex flex-col justify-end gap-0">
-        <span class="flex gap-4 pe-0"> 
-          
-                <button id="btn-secondaryAction" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                    <i class="bi bi-plus"></i>
-                </button>
-                  <button id="btn-primaryAction" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-                    <i class="bi bi-x"></i>
-                </button>
-        </span>
-             
-        <span class="mx-auto">
-        <button id="btn-jump" class="w-20 h-20 rounded-full bg-blue-950 text-white cursor-pointer flex items-center justify-center active:scale-90 transition-all pointer-events-auto select-none">
-            <i class="bi bi-circle"></i>
-        </button>
-          </span>
-          
-      </div>
-    `;
+        const secondaryActionButton = this.createButton("btn-secondaryAction", "bi-plus", 3, 0);
+        const primaryActionButton = this.createButton("btn-primaryAction", "bi-x", 3, 1);
+
+        const jumpButton = this.createButton("btn-jump", "bi-circle", 4, 1);
+
+        // append buttons to dpad in right position
+        const dpadContainerLeft = document.getElementById("dpad-container-btn-container-left") as HTMLDivElement;
+        dpadContainerLeft.appendChild(emptyPlaceholder1);
+        dpadContainerLeft.appendChild(upButton);
+        dpadContainerLeft.appendChild(emptyPlaceholder2);
+        dpadContainerLeft.appendChild(leftButton);
+        dpadContainerLeft.appendChild(emptyPlaceholder3);
+        dpadContainerLeft.appendChild(rightButton);
+        dpadContainerLeft.appendChild(emptyPlaceholder4);
+        dpadContainerLeft.appendChild(downButton);
+        dpadContainerLeft.appendChild(emptyPlaceholder5);
+
+        const dpadContainerRight = document.getElementById("dpad-container-btn-container-right") as HTMLDivElement;
+        dpadContainerRight.appendChild(secondaryActionButton);
+        dpadContainerRight.appendChild(primaryActionButton);
+        dpadContainerRight.appendChild(emptyPlaceholder);
+        dpadContainerRight.appendChild(jumpButton);
+    }
+
+    private createContainer(id: string, rows: number, cols: number): HTMLDivElement {
+        // left and right containers, 1 up/down container, 1 action container
+        // 4 or 3 containers for buttons
+
+        const container = document.createElement("div");
+        container.id = id;
+        container.classList.add(
+            "w-full",
+            "flex",
+            id === "btn-container-left" ? "justify-start" : "justify-end",
+            "items-center",
+            "text-4xl",
+            "p-4",
+            "pointer-events-none",
+            "z-10",
+            "rounded-3xl",
+        );
+
+        // create 2 rows 2 cols for dpad
+        const dpadContainer = document.createElement("div");
+        dpadContainer.id = "dpad-container-" + id;
+        dpadContainer.classList.add("w-fit", "h-full", "gap-2");
+        dpadContainer.classList.add("grid", `grid-cols-${cols}`, `grid-rows-${rows}`);
+
+        container.appendChild(dpadContainer);
+
+        return container;
+    }
+
+    private createButton(id: string, icon: string, row: number, column: number): HTMLButtonElement {
+        const button = document.createElement("button");
+
+        if (id === "empty") {
+            button.id = id;
+            button.classList.add("w-20", "h-20");
+            return button;
+        }
+
+        button.id = id;
+        button.classList.add(
+            "mx-auto",
+            "w-20",
+            "h-20",
+            "rounded-full",
+            "bg-blue-950",
+            "text-white",
+            "cursor-pointer",
+            "flex",
+            "items-center",
+            "justify-center",
+            "active:scale-90",
+            "transition-all",
+            "pointer-events-auto",
+            "select-none",
+        );
+        button.innerHTML = `<i class="bi ${icon}"></i>`;
+        button.dataset.row = row.toString();
+        button.dataset.col = column.toString();
+
+        return button;
     }
 
     private setupEvents(): void {
@@ -107,8 +183,10 @@ export class MobileControls {
     }
 
     public destroy(): void {
-        if (this.container) {
-            this.container.innerHTML = "";
-        }
+        this.remove();
     }
+}
+
+if (!customElements.get("controls-ui")) {
+    customElements.define("controls-ui", MobileControls);
 }

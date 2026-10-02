@@ -1,10 +1,10 @@
 import Phaser from "phaser";
-import { Planet } from "./Planet";
-import { BlockType, type ResourceType } from "../types/GameTypes";
-import type { Player } from "./Player";
-import { useGameStore } from "../store/useGameStore";
-import type { MobileInputState } from "../ui/MobileControls";
-import type { HighlightManager } from "./HighlightManager";
+import { Planet } from "planet";
+import { BlockType, type ResourceType } from "types";
+import type { Player } from "player";
+import { useGameStore } from "@/store/useGameStore";
+import type { MobileInputState } from "ui";
+import type { HighlightManager } from "managers";
 
 export class BuildingManager {
     private scene: Phaser.Scene;

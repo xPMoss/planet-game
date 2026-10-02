@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { MainScene } from "./scenes/MainScene";
+import VirtualJoystickPlugin from "phaser3-rex-plugins/plugins/virtualjoystick-plugin.js";
+import { MainScene } from "scenes";
 
 export const PhysicsConfig = {
   // Fysik-iterations för Matter.js (förhindrar penetration)

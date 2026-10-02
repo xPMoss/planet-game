@@ -1,12 +1,16 @@
 import Phaser from "phaser";
-import type { Planet } from "./Planet";
-import type { Player } from "./Player";
+import type { Planet } from "../planet/Planet";
+import type { Player } from "../player/Player";
+
+// Dubbellkolla pinch logik på mobilen
 
 export class CameraController {
   private scene: Phaser.Scene;
   private camera: Phaser.Cameras.Scene2D.Camera;
   private planet: Planet;
   private player: Player;
+
+  private defaultZoom: number = 2; // 1.8
 
   private prevPinchDistance: number = 0;
   private isFollowingPlayer: boolean = true;
@@ -20,7 +24,7 @@ export class CameraController {
 
   public follow(target: Phaser.GameObjects.GameObject): void {
     this.camera.startFollow(target, true, 0.1, 0.1);
-    this.camera.setZoom(1.8);
+    this.camera.setZoom(this.defaultZoom);
     this.camera.setFollowOffset(0, 0);
     this.isFollowingPlayer = true;
 

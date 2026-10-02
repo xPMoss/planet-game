@@ -1,7 +1,5 @@
-import Phaser from 'phaser';
-import { GameConfig } from './GameConfig';
-import { HotbarUI } from './ui/Hotbar';
+import "./global-phaser"; // MÅSTE ligga först!
+import Phaser from "phaser";
+import { GameConfig } from "./GameConfig";
 
 new Phaser.Game(GameConfig);
-
-new HotbarUI();

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
-import { Planet } from "./Planet";
-import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture } from "./playerHelpers";
-import type { MobileInputState } from "../ui/MobileControls";
+import { Planet } from "planet";
+import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture, createPlayerTexture } from "./playerHelpers";
+import type { MobileInputState } from "ui";
 
 type Directions = {
     tangentX: number;
@@ -17,6 +17,9 @@ type Directions = {
 };
 
 export class Player {
+    private debugGraphics!: Phaser.GameObjects.Graphics;
+    private debugText!: Phaser.GameObjects.Text;
+
     private scene: Phaser.Scene;
     private planet: Planet;
     public sprite: Phaser.Physics.Matter.Sprite;
@@ -37,6 +40,8 @@ export class Player {
     private moveVector: Phaser.Math.Vector2 = new Phaser.Math.Vector2();
     private jumpVector: Phaser.Math.Vector2 = new Phaser.Math.Vector2();
 
+    private numpadKeys?: Record<string, Phaser.Input.Keyboard.Key>;
+
     constructor(scene: Phaser.Scene, planet: Planet) {
         this.scene = scene;
         this.planet = planet;
@@ -48,6 +53,11 @@ export class Player {
         // Skapa spriten på planetens skapade yta
         const startX = planet.center.x;
         const startY = planet.center.y - (planet.config.radius * planet.config.blockSize + 20);
+
+        // Skapa spelarens textur om den inte redan genererats
+        if (!this.scene.textures.exists("player_tile")) {
+            createPlayerTexture(this.scene, "player_tile", 0x00ff00);
+        }
 
         this.sprite = this.scene.matter.add.sprite(startX, startY, "player_tile");
 
@@ -88,18 +98,32 @@ export class Player {
             });
         });
 
+        if (scene.input.keyboard) {
+            this.numpadKeys = scene.input.keyboard.addKeys({
+                up: Phaser.Input.Keyboard.KeyCodes.NUMPAD_EIGHT,
+                down: Phaser.Input.Keyboard.KeyCodes.NUMPAD_TWO,
+                left: Phaser.Input.Keyboard.KeyCodes.NUMPAD_FOUR,
+                right: Phaser.Input.Keyboard.KeyCodes.NUMPAD_SIX,
+            }) as Record<string, Phaser.Input.Keyboard.Key>;
+        }
+
+        this.createDebug();
+
         console.log("Player body:", this.sprite.body);
     }
 
     public spawn(): void {
-        if (this.scene.textures.exists("player_tile")) {
-            console.log("Texture exists");
+        if (!this.scene.textures.exists("player_tile")) {
+            createPlayerTexture(this.scene, "player_tile", 0x00ff00);
         }
 
         // Skapa hattexturen om den inte redan finns
         if (!this.scene.textures.exists("player_hat")) {
             createPlayerHatTexture(this.scene, "player_hat", 0xff0000);
             this.hat = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_hat");
+            // Minska hattens visningsstorlek till den fysiska spelstorleken (14x8)
+            // this.hat.setDisplaySize(14, 8);
+            this.hat.setScale(0.25);
             this.hat.setOrigin(0.5, 1);
         }
 
@@ -111,7 +135,11 @@ export class Player {
         return this.direction;
     }
 
-    public update(cursors: Phaser.Types.Input.Keyboard.CursorKeys, mobileState?: MobileInputState): void {
+    public update(
+        cursors: Phaser.Types.Input.Keyboard.CursorKeys,
+        mobileState?: MobileInputState,
+        keyboard?: Phaser.Input.Keyboard.KeyboardPlugin,
+    ): void {
         if (!this.sprite.body || !this.sprite.body.velocity || !this.sprite.body.position) return;
 
         const body = this.sprite.body as MatterJS.BodyType;
@@ -134,16 +162,18 @@ export class Player {
         this.applyGravity(directions);
         const targetSpeed = 4; // Önskad rörelsehastighet
 
-        if (cursors.left.isDown || Boolean(mobileState?.left)) {
-            // Bevara befintlig hastighet mot/från centrum, men sätt tangenten
+        const isUp = Boolean(this.numpadKeys?.up?.isDown) || cursors.up.isDown || Boolean(mobileState?.up);
+        const isDown = Boolean(this.numpadKeys?.down?.isDown) || cursors.down.isDown || Boolean(mobileState?.down);
+        const isLeft = Boolean(this.numpadKeys?.left?.isDown) || cursors.left.isDown || Boolean(mobileState?.left);
+        const isRight = Boolean(this.numpadKeys?.right?.isDown) || cursors.right.isDown || Boolean(mobileState?.right);
+
+        if (isLeft) {
             this.sprite.setVelocity(
                 -directions.tangentX * targetSpeed + directions.currentVelocity.x * 0.1,
                 -directions.tangentY * targetSpeed + directions.currentVelocity.y * 0.1,
             );
             this.direction = "left";
-        }
-
-        if (cursors.right.isDown || Boolean(mobileState?.right)) {
+        } else if (isRight) {
             this.sprite.setVelocity(
                 directions.tangentX * targetSpeed + directions.currentVelocity.x * 0.1,
                 directions.tangentY * targetSpeed + directions.currentVelocity.y * 0.1,
@@ -151,11 +181,9 @@ export class Player {
             this.direction = "right";
         }
 
-        if (cursors.down.isDown || Boolean(mobileState?.down)) {
+        if (isDown) {
             this.direction = "down";
-        }
-
-        if (cursors.up.isDown || Boolean(mobileState?.up)) {
+        } else if (isUp) {
             this.direction = "up";
         }
 
@@ -171,6 +199,8 @@ export class Player {
 
         this.updateHatPosition();
         this.drawEyes();
+
+        this.updateDebugGraphics();
     }
 
     private applyGravity(directions: Directions): void {
@@ -244,23 +274,58 @@ export class Player {
         this.eyesGraphics.setPosition(this.sprite.x, this.sprite.y);
         this.eyesGraphics.setRotation(this.sprite.rotation);
 
-        // Förskjutning för pupiller baserat på riktning
+        // Minska skalan till 0.25 så att koordinaterna nedan ritas i 4x upplösning
+        const eyeScale = 0.25;
+        this.eyesGraphics.setScale(eyeScale);
+
+        // Förskjutning för pupiller baserat på riktning (skalad 4x för exakt samma avstånd)
         let pupilOffsetX = 0;
         let pupilOffsetY = 0;
 
-        if (this.direction === "right") pupilOffsetX = 1;
-        if (this.direction === "left") pupilOffsetX = -1;
-        if (this.direction === "up") pupilOffsetY = -1;
-        if (this.direction === "down") pupilOffsetY = 1;
+        if (this.direction === "right") pupilOffsetX = 4;
+        if (this.direction === "left") pupilOffsetX = -4;
+        if (this.direction === "up") pupilOffsetY = -4;
+        if (this.direction === "down") pupilOffsetY = 4;
 
-        // Rita vita ögon i lokala koordinater (där (0,0) är spelarens mittpunkt)
+        // Vita ögon (ursprungligen -4, -4 med storlek 3x4 -> skalat till -16, -16 med storlek 12x16)
         this.eyesGraphics.fillStyle(0xffffff, 1);
-        this.eyesGraphics.fillRect(-4, -4, 3, 4);
-        this.eyesGraphics.fillRect(1, -4, 3, 4);
+        this.eyesGraphics.fillRect(-16, -16, 12, 16);
+        this.eyesGraphics.fillRect(4, -16, 12, 16);
 
-        // Rita svarta pupiller i lokala koordinater
+        // Svarta pupiller (ursprungligen -3, -3 med storlek 2x2 -> skalat till -12, -12 med storlek 8x8)
         this.eyesGraphics.fillStyle(0x000000, 1);
-        this.eyesGraphics.fillRect(-3 + pupilOffsetX, -3 + pupilOffsetY, 2, 2);
-        this.eyesGraphics.fillRect(2 + pupilOffsetX, -3 + pupilOffsetY, 2, 2);
+        this.eyesGraphics.fillRect(-12 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
+        this.eyesGraphics.fillRect(8 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
+    }
+
+    private createDebug() {
+        this.debugGraphics = this.scene.add.graphics();
+        this.debugText = this.scene.add.text(0, 0, "", {
+            fontFamily: "monospace",
+            fontSize: "16px",
+            align: "center",
+            color: "#ffffff",
+            backgroundColor: "#00000088",
+        });
+        this.debugText.setDepth(100);
+        this.debugText.setScale(0.5);
+    }
+
+    private updateDebugGraphics(): void {
+        this.debugGraphics.clear();
+
+        const isDebugActive = this.scene.matter.world.drawDebug;
+
+        if (isDebugActive && this?.sprite) {
+            const playerX = this.sprite.x;
+            const playerY = this.sprite.y;
+            const direction = this.getDirection();
+
+            this.debugText.setPosition(playerX - 10, playerY - 24);
+            this.debugText.setText(direction);
+            this.debugText.setVisible(false);
+        } else {
+            this.debugText.setVisible(false);
+        }
     }
 }

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
-import type { Planet } from "./Planet";
-import type { Player } from "./Player";
-import { useGameStore } from "../store/useGameStore";
+import type { Planet } from "planet";
+import type { Player } from "player";
+import { useGameStore } from "src/store/useGameStore";
 
 export class HighlightManager {
     private scene: Phaser.Scene;
