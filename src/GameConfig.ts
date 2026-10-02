@@ -1,5 +1,4 @@
 import Phaser from "phaser";
-import VirtualJoystickPlugin from "phaser3-rex-plugins/plugins/virtualjoystick-plugin.js";
 import { MainScene } from "scenes";
 
 export const PhysicsConfig = {
