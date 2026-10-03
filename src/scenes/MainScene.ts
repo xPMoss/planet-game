@@ -106,7 +106,7 @@ export class MainScene extends Phaser.Scene {
       lineOpacity?: number;
     };
 
-    debugConfig.showBody = false;
+    debugConfig.showBody = true;
     debugConfig.showStaticBody = true;
     debugConfig.showVelocity = true;
 

@@ -17,7 +17,7 @@ export class PlanetOutline {
         this.optimizer = new PlanetOptimizer(scene, planet);
     }
 
-    public draw(depth: number = 3): void {
+    public draw(depth: number = 4): void {
         if (this.outlineGraphics) {
             this.outlineGraphics.clear();
         } else {

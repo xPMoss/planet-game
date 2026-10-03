@@ -183,7 +183,7 @@ export class Planet {
 
     const image = this.scene.matter.add.image(worldX, worldY, textureKey, undefined, {
       isStatic: true,
-      friction: 0.1,
+      friction: 0,
     });
     image.setDisplaySize(blockSize, blockSize);
 
