@@ -29,7 +29,7 @@ export class Player {
     private moveSpeed: number = 0.001;
     private jumpForce: number = 0.005;
     private isGrounded: boolean = false;
-    private maxVelocity: number = 8;
+    private maxVelocity: number = 2;
 
     private hat!: Phaser.GameObjects.Sprite;
     private eyesGraphics!: Phaser.GameObjects.Graphics;
@@ -139,33 +139,33 @@ export class Player {
         cursors: Phaser.Types.Input.Keyboard.CursorKeys,
         mobileState?: MobileInputState,
         keyboard?: Phaser.Input.Keyboard.KeyboardPlugin,
+        joystickState?: {
+            up: boolean;
+            down: boolean;
+            left: boolean;
+            right: boolean;
+            direction?: "left" | "right" | "up" | "down" | null;
+        },
     ): void {
         if (!this.sprite.body || !this.sprite.body.velocity || !this.sprite.body.position) return;
-
-        const body = this.sprite.body as MatterJS.BodyType;
-
-        const velocity = body.velocity;
-        const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-
-        if (currentSpeed > this.maxVelocity) {
-            // Räkna ut skalfaktorn för att sänka hastigheten till maxVelocity
-            const scale = this.maxVelocity / currentSpeed;
-
-            this.scene.matter.body.setVelocity(this.sprite.body as MatterJS.BodyType, {
-                x: velocity.x * scale,
-                y: velocity.y * scale,
-            });
-        }
 
         const directions = this.calculateDirections()!;
         if (directions.distanceToPlanetCenter === 0) return;
         this.applyGravity(directions);
-        const targetSpeed = 4; // Önskad rörelsehastighet
+        const targetSpeed = 2; // Önskad rörelsehastighet
 
-        const isUp = Boolean(this.numpadKeys?.up?.isDown) || cursors.up.isDown || Boolean(mobileState?.up);
-        const isDown = Boolean(this.numpadKeys?.down?.isDown) || cursors.down.isDown || Boolean(mobileState?.down);
-        const isLeft = Boolean(this.numpadKeys?.left?.isDown) || cursors.left.isDown || Boolean(mobileState?.left);
-        const isRight = Boolean(this.numpadKeys?.right?.isDown) || cursors.right.isDown || Boolean(mobileState?.right);
+        if (joystickState?.direction) {
+            this.direction = joystickState.direction;
+        }
+
+        // Kombinera styrning för rörelse (aktiveras först i den yttre ringen för joysticken)
+        const isUp = Boolean(this.numpadKeys?.up?.isDown) || cursors.up.isDown || Boolean(mobileState?.up) || Boolean(joystickState?.up);
+        const isDown =
+            Boolean(this.numpadKeys?.down?.isDown) || cursors.down.isDown || Boolean(mobileState?.down) || Boolean(joystickState?.down);
+        const isLeft =
+            Boolean(this.numpadKeys?.left?.isDown) || cursors.left.isDown || Boolean(mobileState?.left) || Boolean(joystickState?.left);
+        const isRight =
+            Boolean(this.numpadKeys?.right?.isDown) || cursors.right.isDown || Boolean(mobileState?.right) || Boolean(joystickState?.right);
 
         if (isLeft) {
             this.sprite.setVelocity(
@@ -195,6 +195,23 @@ export class Player {
             this.sprite.setVelocity(directions.upX * jumpSpeed, directions.upY * jumpSpeed);
 
             this.isGrounded = false;
+        }
+
+        const body = this.sprite.body as MatterJS.BodyType;
+        const velX = body.velocity.x;
+        const velY = body.velocity.y;
+
+        // Räkna ut tangentiell hastighet (längs marken)
+        const tangentSpeed = velX * directions.tangentX + velY * directions.tangentY;
+
+        if (Math.abs(tangentSpeed) > this.maxVelocity) {
+            const clampedTangent = Math.sign(tangentSpeed) * this.maxVelocity;
+            const diff = clampedTangent - tangentSpeed;
+
+            this.scene.matter.body.setVelocity(body, {
+                x: velX + directions.tangentX * diff,
+                y: velY + directions.tangentY * diff,
+            });
         }
 
         this.updateHatPosition();

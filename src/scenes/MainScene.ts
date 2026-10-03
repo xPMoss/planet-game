@@ -3,6 +3,7 @@ import { Planet } from "planet";
 import { Player } from "player";
 import { CameraController } from "camera";
 import { MiningManager, HighlightManager, BuildingManager } from "managers";
+//import { VirtualJoystick } from "phaser-virtual-joystick";
 
 import { Header, MobileControls, VirtualJoystick } from "ui";
 
@@ -17,7 +18,7 @@ export class MainScene extends Phaser.Scene {
   private keyboard!: Phaser.Input.Keyboard.KeyboardPlugin;
 
   mobileControls!: MobileControls;
-  joystick!: VirtualJoystick;
+  virtualJoystick!: VirtualJoystick;
   header!: Header;
 
   constructor() {
@@ -58,10 +59,11 @@ export class MainScene extends Phaser.Scene {
     }
 
     // UI
-    this.mobileControls = document.createElement("controls-ui") as MobileControls;
-    //document.body.prepend(this.mobileControls);
-    this.joystick = new VirtualJoystick(this, 150, 500, 40);
+    this.virtualJoystick = document.createElement("virtual-joystick") as VirtualJoystick;
+    document.body.appendChild(this.virtualJoystick);
 
+    this.mobileControls = document.createElement("controls-ui") as MobileControls;
+    document.body.prepend(this.mobileControls);
     this.header = document.createElement("header-ui") as Header;
     document.body.prepend(this.header);
 
@@ -78,7 +80,7 @@ export class MainScene extends Phaser.Scene {
   override update(): void {
     if (!this.player || !this.highlightManager || !this.miningManager || !this.buildingManager) return;
 
-    this.player.update(this.cursors, this.mobileControls.state, this.keyboard);
+    this.player.update(this.cursors, this.mobileControls?.state, this.keyboard, this.virtualJoystick.state);
     this.cameraController.update();
 
     // Uppdatera markören samt båda managers med mobiltillståndet

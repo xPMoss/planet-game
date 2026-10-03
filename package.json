@@ -19,6 +19,7 @@
   "dependencies": {
     "bootstrap-icons": "^1.13.1",
     "phaser": "^4.2.1",
+    "phaser-virtual-joystick": "^0.3.1",
     "phaser3-rex-plugins": "^1.80.20",
     "zustand": "^5.0.15"
   },

@@ -46,7 +46,7 @@ export class MobileControls extends HTMLElement {
     }
 
     private createDomElements(): void {
-        const leftContainer = this.createContainer("btn-container-left", 3, 3);
+        const leftContainer = this.createContainer("btn-container-left", 1, 1);
         const rightContainer = this.createContainer("btn-container-right", 2, 2);
 
         this.appendChild(leftContainer);
@@ -54,10 +54,6 @@ export class MobileControls extends HTMLElement {
 
         const emptyPlaceholder = this.createButton("empty", "", 0, 0);
         const emptyPlaceholder1 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
-        const emptyPlaceholder2 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
-        const emptyPlaceholder3 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
-        const emptyPlaceholder4 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
-        const emptyPlaceholder5 = emptyPlaceholder.cloneNode(true) as HTMLButtonElement;
 
         const upButton = this.createButton("btn-up", "bi-caret-up", 0, 1);
         const leftButton = this.createButton("btn-left", "bi-caret-left", 1, 0);
@@ -71,20 +67,12 @@ export class MobileControls extends HTMLElement {
 
         // append buttons to dpad in right position
         const dpadContainerLeft = document.getElementById("dpad-container-btn-container-left") as HTMLDivElement;
-        dpadContainerLeft.appendChild(emptyPlaceholder1);
-        dpadContainerLeft.appendChild(upButton);
-        dpadContainerLeft.appendChild(emptyPlaceholder2);
-        dpadContainerLeft.appendChild(leftButton);
-        dpadContainerLeft.appendChild(emptyPlaceholder3);
-        dpadContainerLeft.appendChild(rightButton);
-        dpadContainerLeft.appendChild(emptyPlaceholder4);
-        dpadContainerLeft.appendChild(downButton);
-        dpadContainerLeft.appendChild(emptyPlaceholder5);
+        dpadContainerLeft.appendChild(emptyPlaceholder);
 
         const dpadContainerRight = document.getElementById("dpad-container-btn-container-right") as HTMLDivElement;
         dpadContainerRight.appendChild(secondaryActionButton);
         dpadContainerRight.appendChild(primaryActionButton);
-        dpadContainerRight.appendChild(emptyPlaceholder);
+        dpadContainerRight.appendChild(emptyPlaceholder1);
         dpadContainerRight.appendChild(jumpButton);
     }
 

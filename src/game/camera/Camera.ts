@@ -15,11 +15,16 @@ export class CameraController {
   private prevPinchDistance: number = 0;
   private isFollowingPlayer: boolean = true;
 
-  constructor(scene: Phaser.Scene, planet: Planet, player: Player) {
+  constructor(
+    scene: Phaser.Scene,
+    planet: Planet,
+    player: Player,
+    camera?: Phaser.Cameras.Scene2D.Camera, // <--- Ta emot kameran som argument
+  ) {
     this.scene = scene;
     this.planet = planet;
     this.player = player;
-    this.camera = scene.cameras.main;
+    this.camera = camera || scene.cameras.main;
   }
 
   public follow(target: Phaser.GameObjects.GameObject): void {
