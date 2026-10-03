@@ -16,6 +16,8 @@ type Directions = {
     distanceToPlanetCenter: number;
 };
 
+export type PlayerDirection = "right" | "left" | "up" | "down" | "up-right" | "up-left" | "down-right" | "down-left";
+
 export class Player {
     private debugGraphics!: Phaser.GameObjects.Graphics;
     private debugText!: Phaser.GameObjects.Text;
@@ -37,7 +39,7 @@ export class Player {
 
     private hat!: Phaser.GameObjects.Sprite;
     private eyesGraphics!: Phaser.GameObjects.Graphics;
-    private direction: "right" | "left" | "up" | "down" = "right";
+    private direction: PlayerDirection = "right";
 
     // Återanvänd Vector2-objekt för att undvika Garbage Collection
     private gravityVector: Phaser.Math.Vector2 = new Phaser.Math.Vector2();
@@ -108,7 +110,7 @@ export class Player {
         this.eyesGraphics = this.scene.add.graphics();
     }
 
-    public getDirection(): "right" | "left" | "up" | "down" {
+    public getDirection(): PlayerDirection {
         return this.direction;
     }
 
@@ -121,7 +123,7 @@ export class Player {
             down: boolean;
             left: boolean;
             right: boolean;
-            direction?: "left" | "right" | "up" | "down" | null;
+            direction?: PlayerDirection | null;
         },
     ): void {
         if (!this.sprite.body || !this.sprite.body.velocity || !this.sprite.body.position) return;
@@ -138,32 +140,40 @@ export class Player {
         // Kontrollera markkontakt med 3-stråls raycasting
         this.isGrounded = this.checkGroundedWithRay(directions);
 
+        const isUp = Boolean(this.numpadKeys?.up?.isDown) || Boolean(cursors?.up?.isDown) || Boolean(mobileState?.up);
+        const isDown = Boolean(this.numpadKeys?.down?.isDown) || Boolean(cursors?.down?.isDown) || Boolean(mobileState?.down);
+        const isLeft = Boolean(this.numpadKeys?.left?.isDown) || Boolean(cursors?.left?.isDown) || Boolean(mobileState?.left);
+        const isRight = Boolean(this.numpadKeys?.right?.isDown) || Boolean(cursors?.right?.isDown) || Boolean(mobileState?.right);
+
+        // 1. Uppdatera riktningen oavsett om spelaren står stilla eller går
         if (joystickState?.direction) {
             this.direction = joystickState.direction;
+        } else if (isUp && isRight) {
+            this.direction = "up-right";
+        } else if (isUp && isLeft) {
+            this.direction = "up-left";
+        } else if (isDown && isRight) {
+            this.direction = "down-right";
+        } else if (isDown && isLeft) {
+            this.direction = "down-left";
+        } else if (isUp) {
+            this.direction = "up";
+        } else if (isDown) {
+            this.direction = "down";
+        } else if (isLeft) {
+            this.direction = "left";
+        } else if (isRight) {
+            this.direction = "right";
         }
 
-        const isUp =
-            Boolean(this.numpadKeys?.up?.isDown) || Boolean(cursors?.up?.isDown) || Boolean(mobileState?.up) || Boolean(joystickState?.up);
-        const isDown =
-            Boolean(this.numpadKeys?.down?.isDown) ||
-            Boolean(cursors?.down?.isDown) ||
-            Boolean(mobileState?.down) ||
-            Boolean(joystickState?.down);
-        const isLeft =
-            Boolean(this.numpadKeys?.left?.isDown) ||
-            Boolean(cursors?.left?.isDown) ||
-            Boolean(mobileState?.left) ||
-            Boolean(joystickState?.left);
-        const isRight =
-            Boolean(this.numpadKeys?.right?.isDown) ||
-            Boolean(cursors?.right?.isDown) ||
-            Boolean(mobileState?.right) ||
-            Boolean(joystickState?.right);
+        // 2. Rörelse triggas av tangenter eller om joysticken dras förbi gå-gränsen
+        const shouldMoveLeft = isLeft || Boolean(joystickState?.left);
+        const shouldMoveRight = isRight || Boolean(joystickState?.right);
 
         if (!this.isClimbing) {
-            if (isLeft || isRight) {
-                const dirSign = isRight ? 1 : -1;
-                const blockAhead = this.hasBlockInFront(directions, isRight);
+            if (shouldMoveLeft || shouldMoveRight) {
+                const dirSign = shouldMoveRight ? 1 : -1;
+                const blockAhead = this.hasBlockInFront(directions, shouldMoveRight);
 
                 let moveX = directions.tangentX * dirSign;
                 let moveY = directions.tangentY * dirSign;
@@ -178,10 +188,8 @@ export class Player {
                     moveX * this.moveSpeed + directions.currentVelocity.x * 0.1,
                     moveY * this.moveSpeed + directions.currentVelocity.y * 0.1,
                 );
-
-                this.direction = isRight ? "right" : "left";
             } else {
-                // Bromsa in spelaren snabbt när inga styrknappar trycks ned
+                // Bromsa in spelaren snabbt när inga förflyttningsknappar trycks ned
                 const body = this.sprite.body as MatterJS.BodyType;
 
                 const currentTangentSpeed = body.velocity.x * directions.tangentX + body.velocity.y * directions.tangentY;
@@ -196,23 +204,15 @@ export class Player {
             }
         }
 
-        if (isDown) {
-            this.direction = "down";
-        } else if (isUp) {
-            this.direction = "up";
-        }
-
         // Säker kolla av JustDown
         const isSpaceJustDown = Boolean(cursors?.space) && Phaser.Input.Keyboard.JustDown(cursors.space);
         const isMobileJump = Boolean(mobileState?.jump);
         const canJump = time - this.lastJumpTime > this.jumpCooldown;
 
         const isJumpPressed = (isSpaceJustDown || isMobileJump) && canJump;
-        // Player.ts (Inuti update-metoden under klättringslogiken)
-        // Player.ts (i update-metoden)
 
         if (isJumpPressed && this.isGrounded && !this.isClimbing) {
-            const isMovingRight = this.direction === "right";
+            const isMovingRight = this.direction.includes("right");
 
             if (this.canClimb(directions, isMovingRight)) {
                 this.isClimbing = true;
@@ -342,21 +342,16 @@ export class Player {
         return { tangentX, tangentY, currentVelocity, dirX, dirY, dx, dy, upX, upY, distanceToPlanetCenter };
     }
 
-    // Player.ts
-
     private canClimb(directions: Directions, isMovingRight: boolean): boolean {
         const blockSize = this.planet.config.blockSize;
         const dirSign = isMovingRight ? 1 : -1;
 
-        // 1. Positionen direkt framför spelaren (väggen)
         const wallX = Math.floor((this.sprite.x + directions.tangentX * blockSize * dirSign) / blockSize);
         const wallY = Math.floor((this.sprite.y + directions.tangentY * blockSize * dirSign) / blockSize);
 
-        // 2. Positionen direkt ovanför spelaren (taket)
         const headX = Math.floor((this.sprite.x + directions.upX * blockSize) / blockSize);
         const headY = Math.floor((this.sprite.y + directions.upY * blockSize) / blockSize);
 
-        // 3. Målpositionen snett uppåt/framåt
         const targetX = Math.floor((this.sprite.x + directions.upX * blockSize + directions.tangentX * blockSize * dirSign) / blockSize);
         const targetY = Math.floor((this.sprite.y + directions.upY * blockSize + directions.tangentY * blockSize * dirSign) / blockSize);
 
@@ -364,7 +359,6 @@ export class Player {
         const hasCeiling = this.planet.blocks.has(headX + "," + headY);
         const isTargetBlocked = this.planet.blocks.has(targetX + "," + targetY);
 
-        // Klättring är endast tillåten om det finns en vägg framför, MEN inget tak och inget block på målplatsen
         return hasWall && !hasCeiling && !isTargetBlocked;
     }
 
@@ -394,7 +388,7 @@ export class Player {
 
         this.hat.setPosition(this.sprite.x + upX * headOffset, this.sprite.y + upY * headOffset);
         this.hat.setRotation(currentRotation);
-        this.hat.setFlipX(this.direction === "left");
+        this.hat.setFlipX(this.direction.includes("left"));
     }
 
     private drawEyes(): void {
@@ -410,10 +404,10 @@ export class Player {
         let pupilOffsetX = 0;
         let pupilOffsetY = 0;
 
-        if (this.direction === "right") pupilOffsetX = 4;
-        if (this.direction === "left") pupilOffsetX = -4;
-        if (this.direction === "up") pupilOffsetY = -4;
-        if (this.direction === "down") pupilOffsetY = 4;
+        if (this.direction.includes("right")) pupilOffsetX = 4;
+        if (this.direction.includes("left")) pupilOffsetX = -4;
+        if (this.direction.includes("up")) pupilOffsetY = -4;
+        if (this.direction.includes("down")) pupilOffsetY = 4;
 
         this.eyesGraphics.fillStyle(0xffffff, 1);
         this.eyesGraphics.fillRect(-16, -16, 12, 16);

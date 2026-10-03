@@ -1,9 +1,11 @@
+import type { PlayerDirection } from "player";
+
 export interface JoystickState {
     up: boolean;
     down: boolean;
     left: boolean;
     right: boolean;
-    direction: "left" | "right" | "up" | "down" | null;
+    direction: PlayerDirection | null;
     force: number;
     angle: number;
 }
@@ -23,12 +25,9 @@ export class VirtualJoystick extends HTMLElement {
     private thumb!: HTMLDivElement;
     private activePointerId: number | null = null;
 
-    // Ökad radie för ett större område (tidigare 40px, nu 60px)
     private radius: number = 60;
-
-    // Inställningar för zonerna (0.0 - 1.0)
-    private innerThreshold: number = 0.2; // Minsta drag för att ändra riktning
-    private outerThreshold: number = 0.6; // Krävs 70% drag utåt för att karaktären ska gå
+    private innerThreshold: number = 0.2;
+    private outerThreshold: number = 0.6;
 
     connectedCallback(): void {
         this.render();
@@ -36,7 +35,6 @@ export class VirtualJoystick extends HTMLElement {
     }
 
     private render(): void {
-        const innerRingDiameter = this.radius * 2 * this.innerThreshold;
         const outerWalkDiameter = this.radius * 2 * this.outerThreshold;
 
         const style = document.createElement("style");
@@ -64,7 +62,6 @@ export class VirtualJoystick extends HTMLElement {
             "  align-items: center;" +
             "  justify-content: center;" +
             "}" +
-            "/* Visuell gränslinje för var gå-zonen startar */" +
             ".joystick-walk-boundary {" +
             "  width: " +
             outerWalkDiameter +
@@ -92,7 +89,6 @@ export class VirtualJoystick extends HTMLElement {
             "  transform: translate(0px, 0px);" +
             "  transition: background-color 0.15s ease;" +
             "}" +
-            "/* Ändrar färg på knoppen när man kliver ut i gå-zonen */" +
             ".joystick-thumb.walking {" +
             "  background: rgba(0, 255, 150, 0.9);" +
             "}";
@@ -103,7 +99,6 @@ export class VirtualJoystick extends HTMLElement {
         this.base = document.createElement("div");
         this.base.className = "joystick-base";
 
-        // Markering för gå-gränsen
         const walkBoundary = document.createElement("div");
         walkBoundary.className = "joystick-walk-boundary";
         this.base.appendChild(walkBoundary);
@@ -157,22 +152,51 @@ export class VirtualJoystick extends HTMLElement {
 
         const force = clampedDist / this.radius;
 
-        const cos = Math.cos(angle);
-        const sin = Math.sin(angle);
+        let currentDirection: PlayerDirection | null = null;
+        let isUp = false;
+        let isDown = false;
+        let isLeft = false;
+        let isRight = false;
 
-        // Bestäm riktning om man dragit utanför minsta inre dödzon (15%)
-        let currentDirection: "left" | "right" | "up" | "down" | null = null;
         if (force > this.innerThreshold) {
-            if (Math.abs(cos) > Math.abs(sin)) {
-                currentDirection = cos > 0 ? "right" : "left";
-            } else {
-                currentDirection = sin > 0 ? "down" : "up";
+            // Beräkna vinkel i grader (0-360)
+            let deg = (angle * 180) / Math.PI;
+            if (deg < 0) deg += 360;
+
+            // Indela i 8 sektorer om 45 grader vardera (offset 22.5 grader)
+            if (deg >= 337.5 || deg < 22.5) {
+                currentDirection = "right";
+                isRight = true;
+            } else if (deg >= 22.5 && deg < 67.5) {
+                currentDirection = "down-right";
+                isDown = true;
+                isRight = true;
+            } else if (deg >= 67.5 && deg < 112.5) {
+                currentDirection = "down";
+                isDown = true;
+            } else if (deg >= 112.5 && deg < 157.5) {
+                currentDirection = "down-left";
+                isDown = true;
+                isLeft = true;
+            } else if (deg >= 157.5 && deg < 202.5) {
+                currentDirection = "left";
+                isLeft = true;
+            } else if (deg >= 202.5 && deg < 247.5) {
+                currentDirection = "up-left";
+                isUp = true;
+                isLeft = true;
+            } else if (deg >= 247.5 && deg < 292.5) {
+                currentDirection = "up";
+                isUp = true;
+            } else if (deg >= 292.5 && deg < 337.5) {
+                currentDirection = "up-right";
+                isUp = true;
+                isRight = true;
             }
         }
 
         const isWalking = force >= this.outerThreshold;
 
-        // Visuell feedback: ändra färg när spelaren kliver in i gå-zonen
         if (isWalking) {
             this.thumb.classList.add("walking");
         } else {
@@ -183,11 +207,10 @@ export class VirtualJoystick extends HTMLElement {
             force: force,
             angle: angle,
             direction: currentDirection,
-            // Gå-flaggor triggas endast i det yttre området (de sista 30%)
-            left: currentDirection === "left" && isWalking,
-            right: currentDirection === "right" && isWalking,
-            up: currentDirection === "up" && isWalking,
-            down: currentDirection === "down" && isWalking,
+            left: isLeft && isWalking,
+            right: isRight && isWalking,
+            up: isUp && isWalking,
+            down: isDown && isWalking,
         };
     }
 

@@ -66,21 +66,44 @@ export class HighlightManager {
         const rightX = -upY;
         const rightY = upX;
 
+        const diag = Math.SQRT1_2; // ~0.7071 (cos/sin för 45 grader)
+
         let dirX = 0;
         let dirY = 0;
 
-        if (playerDirection === "right") {
-            dirX = rightX;
-            dirY = rightY;
-        } else if (playerDirection === "left") {
-            dirX = -rightX;
-            dirY = -rightY;
-        } else if (playerDirection === "up") {
-            dirX = upX;
-            dirY = upY;
-        } else if (playerDirection === "down") {
-            dirX = -upX;
-            dirY = -upY;
+        switch (playerDirection) {
+            case "right":
+                dirX = rightX;
+                dirY = rightY;
+                break;
+            case "left":
+                dirX = -rightX;
+                dirY = -rightY;
+                break;
+            case "up":
+                dirX = upX;
+                dirY = upY;
+                break;
+            case "down":
+                dirX = -upX;
+                dirY = -upY;
+                break;
+            case "up-right":
+                dirX = rightX * diag + upX * diag;
+                dirY = rightY * diag + upY * diag;
+                break;
+            case "up-left":
+                dirX = -rightX * diag + upX * diag;
+                dirY = -rightY * diag + upY * diag;
+                break;
+            case "down-right":
+                dirX = rightX * diag - upX * diag;
+                dirY = rightY * diag - upY * diag;
+                break;
+            case "down-left":
+                dirX = -rightX * diag - upX * diag;
+                dirY = -rightY * diag - upY * diag;
+                break;
         }
 
         const targetX = this.player.sprite.x + dirX * blockSize;
