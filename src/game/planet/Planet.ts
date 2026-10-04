@@ -174,14 +174,29 @@ export class Planet {
       }
 
       if (Math.random() < 0.1) {
-        const dx = surface.x - radius;
-        const dy = surface.y - radius;
-        const dist = Math.hypot(dx, dy);
+        const groundKey = surface.x + "," + surface.y;
+        const groundBlock = this.blocks.get(groundKey);
 
-        const stepX = Math.round(dx / dist);
-        const stepY = Math.round(dy / dist);
+        if (groundBlock && groundBlock.type !== BlockType.AIR) {
+          const dx = surface.x - radius;
+          const dy = surface.y - radius;
+          const absX = Math.abs(dx);
+          const absY = Math.abs(dy);
 
-        this.placeBlock(surface.x + stepX, surface.y + stepY, BlockType.STONE);
+          let stepX = 0;
+          let stepY = 0;
+
+          if (absX > absY) {
+            stepX = dx > 0 ? 1 : -1;
+          } else {
+            stepY = dy > 0 ? 1 : -1;
+          }
+
+          const targetX = surface.x + stepX;
+          const targetY = surface.y + stepY;
+
+          this.placeBlock(targetX, targetY, BlockType.STONE);
+        }
       }
     });
   }
@@ -191,12 +206,20 @@ export class Planet {
 
     const dx = startX - radius;
     const dy = startY - radius;
-    const dist = Math.hypot(dx, dy);
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
 
-    if (dist === 0) return;
+    let dirX = 0;
+    let dirY = 0;
 
-    const stepX = dx / dist;
-    const stepY = dy / dist;
+    if (absX > absY) {
+      dirX = dx > 0 ? 1 : -1;
+    } else {
+      dirY = dy > 0 ? 1 : -1;
+    }
+
+    const sideX = -dirY;
+    const sideY = dirX;
 
     const trunkHeight = 2 + Math.floor(Math.random() * 2);
 
@@ -204,43 +227,28 @@ export class Planet {
     let currentY = startY;
 
     for (let i = 1; i <= trunkHeight; i++) {
-      const targetX = Math.round(startX + stepX * i);
-      const targetY = Math.round(startY + stepY * i);
+      const targetX = startX + dirX * i;
+      const targetY = startY + dirY * i;
 
       this.placeBlock(targetX, targetY, BlockType.WOOD);
       currentX = targetX;
       currentY = targetY;
     }
 
-    const perpX = -stepY;
-    const perpY = stepX;
-
-    const crownTargetSize = 6 + Math.floor(Math.random() * 4);
-    const crownOffsets: { forward: number; side: number }[] = [
-      { forward: 1, side: 0 },
-      { forward: 0, side: 1 },
-      { forward: 0, side: -1 },
-      { forward: 1, side: 1 },
-      { forward: 1, side: -1 },
-      { forward: 2, side: 0 },
-      { forward: 0, side: 2 },
-      { forward: 0, side: -2 },
-      { forward: -1, side: 1 },
-      { forward: -1, side: -1 },
+    const crownLayers = [
+      { forward: 1, sides: [-1, 0, 1] },
+      { forward: 2, sides: [-1, 0, 1] },
+      { forward: 3, sides: [0] },
     ];
 
-    let placedLeaves = 0;
+    crownLayers.forEach((layer) => {
+      layer.sides.forEach((sideOffset) => {
+        const leafX = currentX + dirX * layer.forward + sideX * sideOffset;
+        const leafY = currentY + dirY * layer.forward + sideY * sideOffset;
 
-    for (const offset of crownOffsets) {
-      if (placedLeaves >= crownTargetSize) break;
-
-      const leafX = Math.round(currentX + stepX * offset.forward + perpX * offset.side);
-      const leafY = Math.round(currentY + stepY * offset.forward + perpY * offset.side);
-
-      if (this.placeBlock(leafX, leafY, BlockType.LEAVES)) {
-        placedLeaves++;
-      }
-    }
+        this.placeBlock(leafX, leafY, BlockType.LEAVES);
+      });
+    });
   }
 
   public drawOutline(): void {
@@ -400,7 +408,6 @@ export class Planet {
     const randomAngle = Math.random() * Math.PI * 2;
     item.setRotation(randomAngle);
 
-    // Initial liten stöt utåt från startblocket
     const dx = worldX - this.center.x;
     const dy = worldY - this.center.y;
     const dist = Math.hypot(dx, dy) || 1;
@@ -441,7 +448,6 @@ export class Planet {
     const updateListener = () => {
       if (!item.active) return;
 
-      // Plocka upp looten om spelaren är nära
       const player = this.scene.children.list.find((child) => child.getData("isPlayer")) as Phaser.Physics.Matter.Image | undefined;
       if (player && player.active) {
         const pickupRadius = blockSize * 0.8;
@@ -458,13 +464,11 @@ export class Planet {
       if (item.body) {
         const body = item.body as MatterJS.BodyType;
 
-        // 1. Beräkna avstånd till centrum för att hitta snappad axelvinkel (samma som spelaren använder)
         const cDx = this.center.x - item.x;
         const cDy = this.center.y - item.y;
         const absX = Math.abs(cDx);
         const absY = Math.abs(cDy);
 
-        // Bestäm riktningen för "nedåt" snappat till närmaste axel
         let downX = 0;
         let downY = 0;
 
@@ -474,14 +478,12 @@ export class Planet {
           downY = cDy > 0 ? 1 : -1;
         }
 
-        // 2. Beräkna positionen för blocket direkt under looten i rutnätet
         const currentGridX = Math.floor(item.x / blockSize);
         const currentGridY = Math.floor(item.y / blockSize);
 
         const targetGridX = currentGridX + downX;
         const targetGridY = currentGridY + downY;
 
-        // Världskoordinater för målblockets centrum
         const targetWorldX = targetGridX * blockSize + blockSize / 2;
         const targetWorldY = targetGridY * blockSize + blockSize / 2;
 
@@ -493,18 +495,15 @@ export class Planet {
           const dirX = blockDx / blockDist;
           const dirY = blockDy / blockDist;
 
-          // Applicera kraft rakt mot det underliggande blocket
           const gravity = 0.003;
           const force = new Phaser.Math.Vector2(dirX * gravity * body.mass, dirY * gravity * body.mass);
           item.applyForce(force);
         }
 
-        // 3. Om looten rör marken, nollställ glidning längs ytan (tangentiell rörelse)
         if (isTouchingGround) {
           const vx = body.velocity.x;
           const vy = body.velocity.y;
 
-          // Projektion av hastigheten längs fallriktningen
           const dot = vx * downX + vy * downY;
 
           this.scene.matter.body.setVelocity(body, {
