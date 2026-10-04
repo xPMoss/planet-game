@@ -1,8 +1,8 @@
-// Planet.ts
 import Phaser from "phaser";
 import { BlockType, type BlockData } from "types";
-import { SimplexNoise, type PlanetConfig } from "./planetHelpers";
-import { PlanetOutline } from "./planetOutline";
+import { SimplexNoise } from "./planetHelpers";
+import { DEFAULT_PLANET_CONFIG, type PlanetConfig } from "./planetConfig";
+import { PlanetOutline, CATEGORY_PLAYER, CATEGORY_TERRAIN, CATEGORY_LOOT } from "./planetOutline";
 
 export class Planet {
   private scene: Phaser.Scene;
@@ -12,11 +12,11 @@ export class Planet {
   public blocks: Map<string, BlockData> = new Map();
   private outline!: PlanetOutline;
 
-  constructor(scene: Phaser.Scene, config: PlanetConfig) {
+  constructor(scene: Phaser.Scene, config: Partial<PlanetConfig> = {}) {
     this.scene = scene;
-    this.config = config;
+    this.config = Object.assign({}, DEFAULT_PLANET_CONFIG, config);
 
-    const totalPixels = config.radius * 2 * config.blockSize;
+    const totalPixels = this.config.radius * 2 * this.config.blockSize;
     this.center = {
       x: totalPixels / 2,
       y: totalPixels / 2,
@@ -34,10 +34,11 @@ export class Planet {
     this.createBlockTexture("iron_ore_tile", 0x808080);
     this.createBlockTexture("gold_ore_tile", 0xffd700);
     this.createBlockTexture("diamond_tile", 0x00ffff);
+    this.createBlockTexture("wood_tile", 0x5c4033);
+    this.createBlockTexture("leaves_tile", 0x228b22);
   }
 
   private createBlockTexture(key: string, color: number): void {
-    // Högre texturupplösning för skarpa block
     const textureSize = 64;
 
     const graphics = this.scene.make.graphics({ x: 0, y: 0 });
@@ -57,8 +58,13 @@ export class Planet {
     const blockSize = this.config.blockSize;
     const mapSize = radius * 2;
 
-    const caveScale = Math.max(0.25, 8.0 / radius);
-    const caveThreshold = 0.76;
+    const caveScaleFactor = this.config.caveScaleFactor ?? 8.0;
+    const caveScale = Math.max(0.25, caveScaleFactor / radius);
+    const caveThreshold = this.config.caveThreshold ?? 0.76;
+    const mountainScale = this.config.mountainScale ?? 3.0;
+    const mountainIntensity = this.config.mountainIntensity ?? 0.3;
+    const stoneRadiusRatio = this.config.stoneRadiusRatio ?? 0.825;
+    const coreRadiusRatio = this.config.coreRadiusRatio ?? 0.15;
 
     for (let x = 0; x < mapSize; x++) {
       for (let y = 0; y < mapSize; y++) {
@@ -67,8 +73,8 @@ export class Planet {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         const angle = Math.atan2(dy, dx);
-        const mountainNoise = this.noise.noise2D(Math.cos(angle) * 3.0, Math.sin(angle) * 3.0);
-        const dynamicRadius = radius + mountainNoise * 0.3;
+        const mountainNoise = this.noise.noise2D(Math.cos(angle) * mountainScale, Math.sin(angle) * mountainScale);
+        const dynamicRadius = radius + mountainNoise * mountainIntensity;
 
         let blockType: BlockType = BlockType.AIR;
 
@@ -77,9 +83,9 @@ export class Planet {
           const isCave = caveNoise > caveThreshold && distance > Math.max(3, radius * 0.3);
 
           if (!isCave) {
-            if (distance <= Math.max(2, radius * 0.15)) {
+            if (distance <= Math.max(2, radius * coreRadiusRatio)) {
               blockType = BlockType.CORE;
-            } else if (distance <= dynamicRadius * 0.825) {
+            } else if (distance <= dynamicRadius * stoneRadiusRatio) {
               blockType = BlockType.STONE;
             } else {
               blockType = BlockType.DIRT;
@@ -114,7 +120,127 @@ export class Planet {
       }
     }
 
+    this.generateSurfaceObjects();
     this.drawOutline();
+  }
+
+  private generateSurfaceObjects(): void {
+    const surfaceBlocks: { x: number; y: number }[] = [];
+    const radius = this.config.radius;
+
+    this.blocks.forEach((block) => {
+      if (block.type !== BlockType.DIRT) return;
+
+      const dx = block.x - radius;
+      const dy = block.y - radius;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist === 0) return;
+
+      const dirX = Math.round(dx / dist);
+      const dirY = Math.round(dy / dist);
+
+      const checkKey = block.x + dirX + "," + (block.y + dirY);
+      if (!this.blocks.has(checkKey)) {
+        surfaceBlocks.push({ x: block.x, y: block.y });
+      }
+    });
+
+    for (let i = surfaceBlocks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = surfaceBlocks[i];
+      surfaceBlocks[i] = surfaceBlocks[j];
+      surfaceBlocks[j] = temp;
+    }
+
+    const maxTrees = 5 + Math.floor(Math.random() * 6);
+    let treeCount = 0;
+
+    const treePositions: { x: number; y: number }[] = [];
+    const minTreeDistance = 8;
+
+    surfaceBlocks.forEach((surface) => {
+      if (treeCount < maxTrees) {
+        const tooClose = treePositions.some((pos) => {
+          return Math.hypot(pos.x - surface.x, pos.y - surface.y) < minTreeDistance;
+        });
+
+        if (!tooClose) {
+          this.buildTreeOutward(surface.x, surface.y);
+          treePositions.push({ x: surface.x, y: surface.y });
+          treeCount++;
+          return;
+        }
+      }
+
+      if (Math.random() < 0.1) {
+        const dx = surface.x - radius;
+        const dy = surface.y - radius;
+        const dist = Math.hypot(dx, dy);
+
+        const stepX = Math.round(dx / dist);
+        const stepY = Math.round(dy / dist);
+
+        this.placeBlock(surface.x + stepX, surface.y + stepY, BlockType.STONE);
+      }
+    });
+  }
+
+  private buildTreeOutward(startX: number, startY: number): void {
+    const radius = this.config.radius;
+
+    const dx = startX - radius;
+    const dy = startY - radius;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist === 0) return;
+
+    const stepX = dx / dist;
+    const stepY = dy / dist;
+
+    const trunkHeight = 2 + Math.floor(Math.random() * 2);
+
+    let currentX = startX;
+    let currentY = startY;
+
+    for (let i = 1; i <= trunkHeight; i++) {
+      const targetX = Math.round(startX + stepX * i);
+      const targetY = Math.round(startY + stepY * i);
+
+      this.placeBlock(targetX, targetY, BlockType.WOOD);
+      currentX = targetX;
+      currentY = targetY;
+    }
+
+    const perpX = -stepY;
+    const perpY = stepX;
+
+    const crownTargetSize = 6 + Math.floor(Math.random() * 4);
+    const crownOffsets: { forward: number; side: number }[] = [
+      { forward: 1, side: 0 },
+      { forward: 0, side: 1 },
+      { forward: 0, side: -1 },
+      { forward: 1, side: 1 },
+      { forward: 1, side: -1 },
+      { forward: 2, side: 0 },
+      { forward: 0, side: 2 },
+      { forward: 0, side: -2 },
+      { forward: -1, side: 1 },
+      { forward: -1, side: -1 },
+    ];
+
+    let placedLeaves = 0;
+
+    for (const offset of crownOffsets) {
+      if (placedLeaves >= crownTargetSize) break;
+
+      const leafX = Math.round(currentX + stepX * offset.forward + perpX * offset.side);
+      const leafY = Math.round(currentY + stepY * offset.forward + perpY * offset.side);
+
+      if (this.placeBlock(leafX, leafY, BlockType.LEAVES)) {
+        placedLeaves++;
+      }
+    }
   }
 
   public drawOutline(): void {
@@ -122,12 +248,9 @@ export class Planet {
   }
 
   public getBlockMaxHp(type: BlockType): number {
-    if (type === BlockType.CORE) return 100;
-    if (type === BlockType.STONE) return 3;
-    if (type === BlockType.COAL) return 2;
-    if (type === BlockType.IRON_ORE) return 5;
-    if (type === BlockType.GOLD_ORE) return 8;
-    if (type === BlockType.DIAMOND) return 15;
+    if (this.config.blockHp && typeof this.config.blockHp[type] === "number") {
+      return this.config.blockHp[type];
+    }
     return 1;
   }
 
@@ -138,10 +261,11 @@ export class Planet {
     if (blockType === BlockType.GOLD_ORE) return "gold_ore_tile";
     if (blockType === BlockType.DIAMOND) return "diamond_tile";
     if (blockType === BlockType.COAL) return "coal_tile";
+    if (blockType === BlockType.WOOD) return "wood_tile";
+    if (blockType === BlockType.LEAVES) return "leaves_tile";
     return "dirt_tile";
   }
 
-  // Kollar om alla block förutom CORE är utgrävda
   public isFullyMined(): boolean {
     for (const block of this.blocks.values()) {
       if (block.type !== BlockType.CORE) {
@@ -151,27 +275,255 @@ export class Planet {
     return true;
   }
 
-  // REMOVE BLOCK
   public removeBlock(x: number, y: number): void {
     const key = x + "," + y;
     const block = this.blocks.get(key);
 
     if (block) {
+      const blockType = block.type;
+
       if (block.body.body) {
         this.scene.matter.world.remove(block.body.body);
       }
       block.body.destroy();
       this.blocks.delete(key);
+
+      this.spawnLoot(x, y, blockType);
+
+      if (blockType === BlockType.WOOD || blockType === BlockType.LEAVES) {
+        this.removeConnectedLeaves(x, y);
+      }
+
       this.drawOutline();
 
-      // Kolla om allt förutom core är utgrävt
       if (this.isFullyMined()) {
         this.scene.events.emit("planet-cleared");
       }
     }
   }
 
-  // PLACE BLOCK
+  private removeConnectedLeaves(startX: number, startY: number): void {
+    const neighbors = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+      { x: 1, y: -1 },
+      { x: -1, y: -1 },
+    ];
+
+    const queue: { x: number; y: number }[] = [];
+
+    for (const offset of neighbors) {
+      const nx = startX + offset.x;
+      const ny = startY + offset.y;
+      const key = nx + "," + ny;
+      const neighborBlock = this.blocks.get(key);
+
+      if (neighborBlock && neighborBlock.type === BlockType.LEAVES) {
+        queue.push({ x: nx, y: ny });
+      }
+    }
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const key = current.x + "," + current.y;
+      const block = this.blocks.get(key);
+
+      if (!block || block.type !== BlockType.LEAVES) continue;
+
+      let hasTrunkSupport = false;
+
+      for (const offset of neighbors) {
+        const checkKey = current.x + offset.x + "," + (current.y + offset.y);
+        const checkBlock = this.blocks.get(checkKey);
+
+        if (checkBlock && checkBlock.type === BlockType.WOOD) {
+          hasTrunkSupport = true;
+          break;
+        }
+      }
+
+      if (!hasTrunkSupport) {
+        if (block.body.body) {
+          this.scene.matter.world.remove(block.body.body);
+        }
+        block.body.destroy();
+        this.blocks.delete(key);
+
+        for (const offset of neighbors) {
+          const nx = current.x + offset.x;
+          const ny = current.y + offset.y;
+          const nextKey = nx + "," + ny;
+          const nextBlock = this.blocks.get(nextKey);
+
+          if (nextBlock && nextBlock.type === BlockType.LEAVES) {
+            queue.push({ x: nx, y: ny });
+          }
+        }
+      }
+    }
+  }
+
+  private spawnLoot(gridX: number, gridY: number, blockType: BlockType): void {
+    if (blockType === BlockType.AIR || blockType === BlockType.CORE) return;
+
+    const blockSize = this.config.blockSize;
+    const worldX = gridX * blockSize + blockSize / 2;
+    const worldY = gridY * blockSize + blockSize / 2;
+    const textureKey = this.getTextureKey(blockType);
+
+    const itemSize = blockSize * 0.4;
+
+    const item = this.scene.matter.add.image(worldX, worldY, textureKey, undefined, {
+      shape: "circle",
+      friction: 1.0,
+      frictionStatic: 10.0,
+      frictionAir: 0.02,
+      restitution: 0.0,
+      density: 0.05,
+    });
+
+    if (item.body) {
+      this.scene.matter.body.setInertia(item.body as MatterJS.BodyType, Infinity);
+    }
+
+    item.setCollisionCategory(CATEGORY_LOOT);
+    item.setCollidesWith([CATEGORY_TERRAIN]);
+
+    item.setDisplaySize(itemSize, itemSize);
+    item.setData("itemType", blockType);
+    item.setData("isLoot", true);
+
+    const randomAngle = Math.random() * Math.PI * 2;
+    item.setRotation(randomAngle);
+
+    // Initial liten stöt utåt från startblocket
+    const dx = worldX - this.center.x;
+    const dy = worldY - this.center.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const outX = dx / dist;
+    const outY = dy / dist;
+
+    item.setVelocity(outX * 1.5, outY * 1.5);
+
+    let isTouchingGround = false;
+
+    const onCollisionStart = (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
+      if (!item.body) return;
+
+      for (const pair of event.pairs) {
+        if (pair.bodyA === item.body || pair.bodyB === item.body) {
+          isTouchingGround = true;
+          item.setFrictionAir(0.2);
+          break;
+        }
+      }
+    };
+
+    const onCollisionEnd = (event: Phaser.Physics.Matter.Events.CollisionEndEvent) => {
+      if (!item.body) return;
+
+      for (const pair of event.pairs) {
+        if (pair.bodyA === item.body || pair.bodyB === item.body) {
+          isTouchingGround = false;
+          item.setFrictionAir(0.02);
+          break;
+        }
+      }
+    };
+
+    this.scene.matter.world.on("collisionstart", onCollisionStart);
+    this.scene.matter.world.on("collisionend", onCollisionEnd);
+
+    const updateListener = () => {
+      if (!item.active) return;
+
+      // Plocka upp looten om spelaren är nära
+      const player = this.scene.children.list.find((child) => child.getData("isPlayer")) as Phaser.Physics.Matter.Image | undefined;
+      if (player && player.active) {
+        const pickupRadius = blockSize * 0.8;
+        const playerDist = Math.hypot(player.x - item.x, player.y - item.y);
+
+        if (playerDist <= pickupRadius) {
+          this.scene.events.emit("collect-item", blockType);
+          cleanupListeners();
+          item.destroy();
+          return;
+        }
+      }
+
+      if (item.body) {
+        const body = item.body as MatterJS.BodyType;
+
+        // 1. Beräkna avstånd till centrum för att hitta snappad axelvinkel (samma som spelaren använder)
+        const cDx = this.center.x - item.x;
+        const cDy = this.center.y - item.y;
+        const absX = Math.abs(cDx);
+        const absY = Math.abs(cDy);
+
+        // Bestäm riktningen för "nedåt" snappat till närmaste axel
+        let downX = 0;
+        let downY = 0;
+
+        if (absX > absY) {
+          downX = cDx > 0 ? 1 : -1;
+        } else {
+          downY = cDy > 0 ? 1 : -1;
+        }
+
+        // 2. Beräkna positionen för blocket direkt under looten i rutnätet
+        const currentGridX = Math.floor(item.x / blockSize);
+        const currentGridY = Math.floor(item.y / blockSize);
+
+        const targetGridX = currentGridX + downX;
+        const targetGridY = currentGridY + downY;
+
+        // Världskoordinater för målblockets centrum
+        const targetWorldX = targetGridX * blockSize + blockSize / 2;
+        const targetWorldY = targetGridY * blockSize + blockSize / 2;
+
+        const blockDx = targetWorldX - item.x;
+        const blockDy = targetWorldY - item.y;
+        const blockDist = Math.hypot(blockDx, blockDy);
+
+        if (blockDist > 0) {
+          const dirX = blockDx / blockDist;
+          const dirY = blockDy / blockDist;
+
+          // Applicera kraft rakt mot det underliggande blocket
+          const gravity = 0.003;
+          const force = new Phaser.Math.Vector2(dirX * gravity * body.mass, dirY * gravity * body.mass);
+          item.applyForce(force);
+        }
+
+        // 3. Om looten rör marken, nollställ glidning längs ytan (tangentiell rörelse)
+        if (isTouchingGround) {
+          const vx = body.velocity.x;
+          const vy = body.velocity.y;
+
+          // Projektion av hastigheten längs fallriktningen
+          const dot = vx * downX + vy * downY;
+
+          this.scene.matter.body.setVelocity(body, {
+            x: downX * dot,
+            y: downY * dot,
+          });
+        }
+      }
+    };
+
+    const cleanupListeners = () => {
+      this.scene.events.off("update", updateListener);
+      this.scene.matter.world.off("collisionstart", onCollisionStart);
+      this.scene.matter.world.off("collisionend", onCollisionEnd);
+    };
+
+    this.scene.events.on("update", updateListener);
+  }
+
   public placeBlock(x: number, y: number, blockType: BlockType): boolean {
     const key = x + "," + y;
     if (this.blocks.has(key)) return false;
@@ -184,6 +536,9 @@ export class Planet {
     const image = this.scene.matter.add.image(worldX, worldY, textureKey, undefined, {
       isStatic: true,
       friction: 0,
+      collisionFilter: {
+        category: CATEGORY_TERRAIN,
+      },
     });
     image.setDisplaySize(blockSize, blockSize);
 

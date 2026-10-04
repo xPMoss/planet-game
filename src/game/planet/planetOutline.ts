@@ -1,8 +1,11 @@
-// planetOutline.ts
 import Phaser from "phaser";
 import type { Planet } from "./Planet";
 import { PlanetOptimizer } from "./planetOptimizer";
 import { BlockType } from "types";
+
+export const CATEGORY_PLAYER = 0x0001;
+export const CATEGORY_TERRAIN = 0x0002;
+export const CATEGORY_LOOT = 0x0004;
 
 export class PlanetOutline {
     private scene: Phaser.Scene;
@@ -17,21 +20,21 @@ export class PlanetOutline {
         this.optimizer = new PlanetOptimizer(scene, planet);
     }
 
-    public draw(depth: number = 4): void {
+    public draw(depth?: number): void {
+        const targetDepth = depth ?? this.planet.config.outlineDepth ?? 10;
+
         if (this.outlineGraphics) {
             this.outlineGraphics.clear();
         } else {
             this.outlineGraphics = this.scene.add.graphics();
-            this.outlineGraphics.setDepth(10);
+            this.outlineGraphics.setDepth(targetDepth);
         }
 
-        // 1. Rensa gamla fysikkroppar
         this.outlineBodies.forEach((body) => {
             this.scene.matter.world.remove(body);
         });
         this.outlineBodies = [];
 
-        // 2. Dela upp blocken i CORE och vanliga block
         const coreBlockKeys = new Set<string>();
         const mainBlockKeys = new Set<string>();
 
@@ -43,7 +46,6 @@ export class PlanetOutline {
             }
         });
 
-        // 3. Skapa EN sammansatt kropp för planetens yta
         if (mainBlockKeys.size > 0) {
             const planetBody = this.createCompoundFromKeys(mainBlockKeys);
             if (planetBody) {
@@ -51,7 +53,6 @@ export class PlanetOutline {
             }
         }
 
-        // 4. Skapa EN sammansatt kropp för kärnan (CORE)
         if (coreBlockKeys.size > 0) {
             const coreBody = this.createCompoundFromKeys(coreBlockKeys);
             if (coreBody) {
@@ -59,31 +60,35 @@ export class PlanetOutline {
             }
         }
     }
-
     private createCompoundFromKeys(keys: Set<string>): MatterJS.BodyType | undefined {
-        // Skapa optimerade rektanglar från nycklarna
         const rectBodies = this.optimizer.createCombinedBodies(keys);
 
         if (rectBodies.length === 0) return undefined;
 
-        // Om det bara finns en rektangel behövs ingen compound body
+        rectBodies.forEach((body) => {
+            body.collisionFilter.category = CATEGORY_TERRAIN;
+        });
+
         if (rectBodies.length === 1) {
             return rectBodies[0];
         }
 
-        // Ta bort de enskilda kropparna från världen innan vi slår ihop dem
         rectBodies.forEach((body) => {
             this.scene.matter.world.remove(body);
         });
 
-        // Slå ihop alla rektanglar till EN enda sammansatt Matter.js-kropp
         const compoundBody = this.scene.matter.body.create({
             parts: rectBodies,
             isStatic: true,
-            friction: 0,
-            frictionStatic: 0,
+            friction: 0.8, // Ändrat från 0 till 0.8
+            frictionStatic: 1.0, // Ändrat från 0 till 1.0
             restitution: 0,
             slop: 0,
+            collisionFilter: {
+                category: CATEGORY_TERRAIN,
+                mask: 0xffffffff,
+                group: 0,
+            },
         });
 
         this.scene.matter.world.add(compoundBody);

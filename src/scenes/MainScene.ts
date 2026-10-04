@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Planet } from "planet";
+import { Planet, DEFAULT_PLANET_CONFIG } from "planet";
 import { Player } from "player";
 import { CameraController } from "camera";
 import { MiningManager, HighlightManager, BuildingManager } from "managers";
@@ -27,16 +27,14 @@ export class MainScene extends Phaser.Scene {
 
   preload(): void {
     this.planet = new Planet(this, {
-      radius: 30,
-      blockSize: 16,
-      gravityStrength: 0.001,
+      ...DEFAULT_PLANET_CONFIG,
     });
     this.planet.createTextures();
   }
 
   create(): void {
-    //
-    this.createDebug();
+    // Stäng av den globala gravitationen i Matter-världen
+    this.matter.world.setGravity(0, 0);
 
     //
     this.planet.generate();
@@ -74,6 +72,9 @@ export class MainScene extends Phaser.Scene {
       // Starta nästa bana, ge poäng eller visa en Vinst-UI
     });
 
+    //
+    this.createDebug();
+
     console.log("MainScene.create()", this);
   }
 
@@ -106,8 +107,8 @@ export class MainScene extends Phaser.Scene {
       lineOpacity?: number;
     };
 
-    debugConfig.showBody = true;
-    debugConfig.showStaticBody = true;
+    debugConfig.showBody = false;
+    debugConfig.showStaticBody = false;
     debugConfig.showVelocity = true;
 
     // Sätt tydliga färger och opacitet för spelaren

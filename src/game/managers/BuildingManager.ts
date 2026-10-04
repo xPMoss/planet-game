@@ -12,8 +12,9 @@ export class BuildingManager {
     private player: Player;
     private highlightManager: HighlightManager;
     private maxBuildDistance: number = 48;
-    private readonly debugGraphics: Phaser.GameObjects.Graphics;
+    private debugGraphics!: Phaser.GameObjects.Graphics;
 
+    private buildKey: Phaser.Input.Keyboard.Key | null = null;
     private canBuild: boolean = true;
     private readonly buildCooldownMs: number = 200;
 
@@ -24,30 +25,23 @@ export class BuildingManager {
         this.highlightManager = highlightManager;
 
         this.scene.game.canvas.oncontextmenu = (e) => e.preventDefault();
-        this.debugGraphics = this.scene.add.graphics();
 
         this.setupInput();
+
+        this.createDebug();
     }
 
     public update(mobileState?: MobileInputState): void {
-        this.debugGraphics.clear();
-
-        const isDebugActive = this.scene.matter.world.drawDebug;
-
-        if (isDebugActive && this.player?.sprite) {
-            const playerX = this.player.sprite.x;
-            const playerY = this.player.sprite.y;
-
-            this.debugGraphics.lineStyle(2, 0xffff00, 0.8);
-            this.debugGraphics.fillStyle(0xffff00, 0.1);
-
-            this.debugGraphics.strokeCircle(playerX, playerY, this.maxBuildDistance);
-            this.debugGraphics.fillCircle(playerX, playerY, this.maxBuildDistance);
+        // Bygg när tangenten hålls ned
+        if (this.buildKey && this.buildKey.isDown) {
+            this.placeInFront();
         }
 
         if (mobileState && mobileState.secondaryAction) {
             this.placeInFront();
         }
+
+        this.updateDebugGraphics();
     }
 
     public placeInFront(): void {
@@ -82,6 +76,13 @@ export class BuildingManager {
     }
 
     private setupInput(): void {
+        if (this.scene.input.keyboard) {
+            this.buildKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+            this.buildKey.on("down", () => {
+                this.placeInFront();
+            });
+        }
+
         this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
             if (!pointer.rightButtonDown()) return;
 
@@ -125,5 +126,26 @@ export class BuildingManager {
         if (resource === "gold_ore") return BlockType.GOLD_ORE;
         if (resource === "diamond") return BlockType.DIAMOND;
         return null;
+    }
+
+    private createDebug() {
+        this.debugGraphics = this.scene.add.graphics();
+    }
+
+    private updateDebugGraphics(): void {
+        this.debugGraphics.clear();
+
+        const isDebugActive = this.scene.matter.world.drawDebug;
+
+        if (isDebugActive && this.player?.sprite) {
+            const playerX = this.player.sprite.x;
+            const playerY = this.player.sprite.y;
+
+            this.debugGraphics.lineStyle(2, 0xffff00, 0.8);
+            this.debugGraphics.fillStyle(0xffff00, 0.1);
+
+            this.debugGraphics.strokeCircle(playerX, playerY, this.maxBuildDistance);
+            this.debugGraphics.fillCircle(playerX, playerY, this.maxBuildDistance);
+        }
     }
 }

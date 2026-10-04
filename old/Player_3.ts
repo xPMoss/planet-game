@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { Planet } from "planet";
-import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture, createPlayerTexture } from "player";
-import { CATEGORY_PLAYER, CATEGORY_TERRAIN } from "planet";
+import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture, createPlayerTexture } from "./playerHelpers";
 import type { MobileInputState } from "ui";
 
 type Directions = {
@@ -28,18 +27,20 @@ export class Player {
     public sprite: Phaser.Physics.Matter.Sprite;
     private readonly settings: PlayerSettings;
 
+    private gravityStrength: number = 0.001;
+    private maxVelocity: number = 2;
+    private moveSpeed: number = 2;
     private isGrounded: boolean = false;
     private isClimbing: boolean = false;
 
     // Cooldown för klättring
     private lastJumpTime: number = 0;
+    private jumpCooldown: number = 250;
 
-    private bodySprite!: Phaser.GameObjects.Sprite; // Separat visningsgrafik för kroppen
     private hat!: Phaser.GameObjects.Sprite;
     private eyesGraphics!: Phaser.GameObjects.Graphics;
     private direction: PlayerDirection = "right";
 
-    // Stabil vinkel för gravitation och rotation
     private currentSnapAngle: number = 0;
     private currentDirections?: Directions;
     private activeBlockPos?: { x: number; y: number };
@@ -50,10 +51,46 @@ export class Player {
     private numpadKeys?: Record<string, Phaser.Input.Keyboard.Key>;
     private shiftKey!: Phaser.Input.Keyboard.Key;
 
-    constructor(scene: Phaser.Scene, planet: Planet, customSettings?: Partial<PlayerSettings>) {
+    constructor(scene: Phaser.Scene, planet: Planet) {
         this.scene = scene;
         this.planet = planet;
-        this.settings = { ...DEFAULT_PLAYER_SETTINGS, ...customSettings };
+        this.settings = { ...DEFAULT_PLAYER_SETTINGS };
+
+        // Stäng av den globala gravitationen i Matter-världen
+        this.scene.matter.world.setGravity(0, 0);
+
+        // Skapa spriten på planetens skapade yta
+        const startX = planet.center.x;
+        const startY = planet.center.y - (planet.config.radius * planet.config.blockSize + 20);
+
+        // Skapa spelarens textur om den inte redan genererats
+        if (!this.scene.textures.exists("player_tile")) {
+            createPlayerTexture(this.scene, "player_tile", 0x00ff00);
+        }
+
+        this.sprite = this.scene.matter.add.sprite(startX, startY, "player_tile");
+
+        // VIKTIGT: Gör fysikkroppen KVADRATISK (bredd x bredd) så att rotationen inte trycker in hörn i marken
+        const bodySize = Math.min(this.settings.width, this.settings.height);
+        const body = this.scene.matter.bodies.rectangle(startX, startY, bodySize, bodySize, {
+            friction: 0, // Ingen friktion mot väggar
+            frictionStatic: 1,
+            frictionAir: 0.1,
+            restitution: 0,
+            slop: 0, // Förhindrar att spelaren sjunker in i väggar/golv
+            chamfer: { radius: 2 },
+        });
+
+        // Visuellt behåller vi samma storlek
+        this.sprite.setDisplaySize(this.settings.width, this.settings.height);
+
+        if (this.sprite.body) {
+            const body = this.sprite.body as MatterJS.BodyType;
+            (body as unknown as { isContinuous: boolean }).isContinuous = true;
+        }
+
+        this.sprite.setExistingBody(body);
+        this.sprite.setFixedRotation();
 
         if (scene.input.keyboard) {
             this.numpadKeys = scene.input.keyboard.addKeys({
@@ -66,54 +103,18 @@ export class Player {
             this.shiftKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
         }
 
-        // Skapa spriten på planetens skapade yta
-        const startX = planet.center.x;
-        const startY = planet.center.y - (planet.config.radius * planet.config.blockSize + 20);
-
-        // Kvadratisk fysikkropp (12x12) så att rotation vid hörn inte trycker in spelaren i marken
-        const bodySize = Math.min(this.settings.width, this.settings.height);
-        const body = this.scene.matter.bodies.rectangle(startX, startY, bodySize, bodySize, {
-            friction: this.settings.friction,
-            frictionStatic: this.settings.frictionStatic,
-            frictionAir: this.settings.frictionAir,
-            restitution: this.settings.restitution,
-            slop: 0,
-            chamfer: { radius: 2 },
-        });
-
-        this.sprite = this.scene.matter.add.sprite(startX, startY, "player_tile");
-        this.sprite.setDisplaySize(this.settings.width, this.settings.height);
-
-        if (this.sprite.body) {
-            const body = this.sprite.body as MatterJS.BodyType;
-            (body as unknown as { isContinuous: boolean }).isContinuous = true;
-        }
-
-        this.sprite.setData("isPlayer", true);
-
-        // Sätt att spelaren tillhör CATEGORY_PLAYER och ENDAST krockar med CATEGORY_TERRAIN
-        this.sprite.setCollisionCategory(CATEGORY_PLAYER);
-        this.sprite.setCollidesWith([CATEGORY_TERRAIN]);
-
-        this.sprite.setExistingBody(body);
-        this.sprite.setFixedRotation();
-        this.sprite.setVisible(false);
-
         this.createDebug();
     }
 
     public spawn(): void {
         if (!this.scene.textures.exists("player_tile")) {
-            createPlayerTexture(this.scene, "player_tile", this.settings.bodyColor);
+            createPlayerTexture(this.scene, "player_tile", 0x00ff00);
         }
 
-        this.bodySprite = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_tile");
-        this.bodySprite.setDisplaySize(this.settings.width, this.settings.height);
-
         if (!this.scene.textures.exists("player_hat")) {
-            createPlayerHatTexture(this.scene, "player_hat", this.settings.hatColor);
+            createPlayerHatTexture(this.scene, "player_hat", 0xff0000);
             this.hat = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_hat");
-            this.hat.setScale(this.settings.hatScale);
+            this.hat.setScale(0.25);
             this.hat.setOrigin(0.5, 1);
         }
 
@@ -136,36 +137,19 @@ export class Player {
             direction?: PlayerDirection | null;
         },
     ): void {
-        this.updatePlayer(cursors, mobileState, keyboard, joystickState);
-        this.updateBodyPosition();
-        this.updateHatPosition();
-        this.drawEyes();
-        this.updateDebugGraphics();
-    }
-
-    private updatePlayer(
-        cursors: Phaser.Types.Input.Keyboard.CursorKeys,
-        mobileState?: MobileInputState,
-        keyboard?: Phaser.Input.Keyboard.KeyboardPlugin,
-        joystickState?: {
-            up: boolean;
-            down: boolean;
-            left: boolean;
-            right: boolean;
-            direction?: PlayerDirection | null;
-        },
-    ) {
         if (!this.sprite.body || !this.sprite.body.velocity || !this.sprite.body.position) return;
 
         const time = this.scene.time.now;
 
         const directions = this.calculateDirections();
         if (!directions || directions.distanceToPlanetCenter === 0) return;
+        this.currentDirections = directions; // Spara för debug-ritning
 
         if (!this.isClimbing) {
             this.applyGravity(directions);
         }
 
+        // Kontrollera markkontakt med 3-stråls raycasting
         this.isGrounded = this.checkGroundedWithRay(directions);
 
         const isUp = Boolean(this.numpadKeys?.up?.isDown) || Boolean(cursors?.up?.isDown) || Boolean(mobileState?.up);
@@ -174,7 +158,7 @@ export class Player {
         const isRight = Boolean(this.numpadKeys?.right?.isDown) || Boolean(cursors?.right?.isDown) || Boolean(mobileState?.right);
 
         const isHoldingShift = Boolean(this.shiftKey?.isDown);
-
+        // Uppdatera riktningen
         if (joystickState?.direction) {
             this.direction = joystickState.direction;
         } else if (isUp && isRight) {
@@ -195,6 +179,7 @@ export class Player {
             this.direction = "right";
         }
 
+        // Förflyttning blockeras helt om Ctrl hålls in
         const shouldMoveLeft = !isHoldingShift && (isLeft || Boolean(joystickState?.left));
         const shouldMoveRight = !isHoldingShift && (isRight || Boolean(joystickState?.right));
 
@@ -213,10 +198,11 @@ export class Player {
                 }
 
                 this.sprite.setVelocity(
-                    moveX * this.settings.moveSpeed + directions.currentVelocity.x * 0.1,
-                    moveY * this.settings.moveSpeed + directions.currentVelocity.y * 0.1,
+                    moveX * this.moveSpeed + directions.currentVelocity.x * 0.1,
+                    moveY * this.moveSpeed + directions.currentVelocity.y * 0.1,
                 );
             } else {
+                // Bromsa in spelaren snabbt när inga förflyttningsknappar trycks ned
                 const body = this.sprite.body as MatterJS.BodyType;
 
                 const currentTangentSpeed = body.velocity.x * directions.tangentX + body.velocity.y * directions.tangentY;
@@ -231,9 +217,10 @@ export class Player {
             }
         }
 
+        // Säker kolla av JustDown
         const isSpaceJustDown = Boolean(cursors?.space) && Phaser.Input.Keyboard.JustDown(cursors.space);
         const isMobileJump = Boolean(mobileState?.jump);
-        const canJump = time - this.lastJumpTime > this.settings.jumpCooldown;
+        const canJump = time - this.lastJumpTime > this.jumpCooldown;
 
         const isJumpPressed = (isSpaceJustDown || isMobileJump) && canJump;
 
@@ -256,7 +243,7 @@ export class Player {
                     targets: this.sprite,
                     x: targetX,
                     y: targetY,
-                    duration: this.settings.climbDuration,
+                    duration: 180,
                     ease: "Linear",
                     onUpdate: () => {
                         this.scene.matter.body.setPosition(body, {
@@ -285,8 +272,8 @@ export class Player {
 
         const tangentSpeed = velX * directions.tangentX + velY * directions.tangentY;
 
-        if (Math.abs(tangentSpeed) > this.settings.maxVelocity && !this.isClimbing) {
-            const clampedTangent = Math.sign(tangentSpeed) * this.settings.maxVelocity;
+        if (Math.abs(tangentSpeed) > this.maxVelocity && !this.isClimbing) {
+            const clampedTangent = Math.sign(tangentSpeed) * this.maxVelocity;
             const diff = clampedTangent - tangentSpeed;
 
             this.scene.matter.body.setVelocity(body, {
@@ -294,6 +281,10 @@ export class Player {
                 y: velY + directions.tangentY * diff,
             });
         }
+
+        this.updateHatPosition();
+        this.drawEyes();
+        this.updateDebugGraphics();
     }
 
     private checkGroundedWithRay(directions: Directions): boolean {
@@ -330,8 +321,9 @@ export class Player {
     private applyGravity(directions: Directions): void {
         if (!this.sprite.body) return;
 
-        // Gravitationen drar mot planetens centrum (-upX, -upY)
-        this.gravityVector.set(-directions.upX * this.settings.gravityStrength, -directions.upY * this.settings.gravityStrength);
+        // Klistra spelaren mot marken med en stark gravitationskraft (-upX, -upY)
+        const stickyForce = this.gravityStrength * 2;
+        this.gravityVector.set(-directions.upX * stickyForce, -directions.upY * stickyForce);
         this.sprite.applyForce(this.gravityVector);
 
         this.sprite.setRotation(this.currentSnapAngle);
@@ -353,20 +345,53 @@ export class Player {
         const dirY = dy / distanceToPlanetCenter;
         const blockSize = this.planet.config.blockSize;
 
-        // Bestäm vinkeln utifrån spelarens position relativt planetens centrum (0, 90, 180, 270 deg)
+        // 1. Beräkna standardvinkeln mot planetens centrum
         const margin = 12;
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
 
-        let targetAngle = this.currentSnapAngle;
-
+        let defaultAngle = this.currentSnapAngle;
         if (absX > absY + margin) {
-            targetAngle = dx > 0 ? -Math.PI / 2 : Math.PI / 2;
+            defaultAngle = dx > 0 ? -Math.PI / 2 : Math.PI / 2;
         } else if (absY > absX + margin) {
-            targetAngle = dy > 0 ? 0 : Math.PI;
+            defaultAngle = dy > 0 ? 0 : Math.PI;
         }
 
-        // Byt vinkel på fysikkroppen vid sidändring
+        // Estimerad upp-vektor för att leta efter block under fötterna
+        const testUpX = Math.sin(defaultAngle);
+        const testUpY = -Math.cos(defaultAngle);
+
+        // 2. Sök efter närmaste markblock runt spelaren
+        const currentGridX = Math.floor(playerPos.x / blockSize);
+        const currentGridY = Math.floor(playerPos.y / blockSize);
+
+        // Vi kollar i 4 riktningar runt spelaren för att hitta närmaste block
+        const neighborOffsets = [
+            { gridX: currentGridX - Math.round(testUpX), gridY: currentGridY - Math.round(testUpY), angle: defaultAngle },
+            { gridX: currentGridX, gridY: currentGridY + 1, angle: 0 }, // Block under
+            { gridX: currentGridX, gridY: currentGridY - 1, angle: Math.PI }, // Block över
+            { gridX: currentGridX + 1, gridY: currentGridY, angle: -Math.PI / 2 }, // Block till höger
+            { gridX: currentGridX - 1, gridY: currentGridY, angle: Math.PI / 2 }, // Block till vänster
+        ];
+
+        let foundBlockKey: string | null = null;
+        let targetAngle = defaultAngle;
+
+        for (const offset of neighborOffsets) {
+            const key = offset.gridX + "," + offset.gridY;
+            if (this.planet.blocks.has(key)) {
+                foundBlockKey = key;
+                targetAngle = offset.angle;
+                this.activeBlockPos = { x: offset.gridX, y: offset.gridY };
+                break;
+            }
+        }
+
+        if (!foundBlockKey) {
+            this.activeBlockPos = undefined;
+        }
+
+        // 3. Tillämpa den valda vinkeln
         if (targetAngle !== this.currentSnapAngle) {
             this.currentSnapAngle = targetAngle;
             const body = this.sprite.body as MatterJS.BodyType;
@@ -376,19 +401,6 @@ export class Player {
 
         const upX = Math.sin(this.currentSnapAngle);
         const upY = -Math.cos(this.currentSnapAngle);
-
-        // Hitta markblocket direkt under fötterna för debug-visning
-        const currentGridX = Math.floor(playerPos.x / blockSize);
-        const currentGridY = Math.floor(playerPos.y / blockSize);
-        const feetGridX = currentGridX - Math.round(upX);
-        const feetGridY = currentGridY - Math.round(upY);
-        const feetKey = feetGridX + "," + feetGridY;
-
-        if (this.planet.blocks.has(feetKey)) {
-            this.activeBlockPos = { x: feetGridX, y: feetGridY };
-        } else {
-            this.activeBlockPos = undefined;
-        }
 
         const tangentX = -upY;
         const tangentY = upX;
@@ -434,23 +446,6 @@ export class Player {
         return this.planet.blocks.has(gridX + "," + gridY);
     }
 
-    private updateBodyPosition(): void {
-        if (!this.bodySprite || !this.sprite) return;
-
-        const currentRotation = this.sprite.rotation;
-        const upAngle = currentRotation - Math.PI / 2;
-
-        const upX = Math.cos(upAngle);
-        const upY = Math.sin(upAngle);
-
-        // Beräkna förskjutningen i "upp"-riktningen baserat på kroppens rotation
-        const offsetX = upX;
-        const offsetY = upY * +2;
-
-        this.bodySprite.setPosition(this.sprite.x + offsetX, this.sprite.y + offsetY);
-        this.bodySprite.setRotation(currentRotation);
-    }
-
     private updateHatPosition(): void {
         if (!this.hat || !this.sprite) return;
 
@@ -460,7 +455,7 @@ export class Player {
         const upX = Math.cos(upAngle);
         const upY = Math.sin(upAngle);
 
-        const headOffset = this.settings.height / 2 + 2;
+        const headOffset = this.settings.height / 2;
 
         this.hat.setPosition(this.sprite.x + upX * headOffset, this.sprite.y + upY * headOffset);
         this.hat.setRotation(currentRotation);
@@ -471,10 +466,11 @@ export class Player {
         if (!this.eyesGraphics || !this.sprite) return;
 
         this.eyesGraphics.clear();
-        this.eyesGraphics.setPosition(this.sprite.x, this.sprite.y - 2);
+        this.eyesGraphics.setPosition(this.sprite.x, this.sprite.y);
         this.eyesGraphics.setRotation(this.sprite.rotation);
 
-        this.eyesGraphics.setScale(this.settings.eyeScale);
+        const eyeScale = 0.25;
+        this.eyesGraphics.setScale(eyeScale);
 
         let pupilOffsetX = 0;
         let pupilOffsetY = 0;
@@ -505,7 +501,6 @@ export class Player {
         this.debugText.setDepth(100);
         this.debugText.setScale(0.5);
     }
-
     private updateDebugGraphics(): void {
         this.debugGraphics.clear();
 
@@ -516,45 +511,41 @@ export class Player {
             const playerY = this.sprite.y;
             const blockSize = this.planet.config.blockSize;
 
-            // 1. Markera det aktiva markblocket med en färgad ram (om det finns ett)
+            // 1. Markera det aktiva markblocket med en grön ram (om det finns ett)
             if (this.activeBlockPos) {
                 const blockWorldX = this.activeBlockPos.x * blockSize;
                 const blockWorldY = this.activeBlockPos.y * blockSize;
 
-                const activeBlockColor = 0x9933ff;
-                this.debugGraphics.lineStyle(2, activeBlockColor, 1);
-                this.debugGraphics.fillStyle(activeBlockColor, 0.8);
+                this.debugGraphics.lineStyle(2, 0x00ff00, 1);
+                this.debugGraphics.fillStyle(0x00ff00, 0.3);
                 this.debugGraphics.strokeRect(blockWorldX, blockWorldY, blockSize, blockSize);
                 this.debugGraphics.fillRect(blockWorldX, blockWorldY, blockSize, blockSize);
             }
 
-            // 2. Rita gravitationsvektorn i rött (pekar mot centrum)
-            const vectorLength = 24;
+            // 2. Rita gravitationsvektorn i rött
+            const vectorLength = 32;
             const gravityDirX = -this.currentDirections.upX;
             const gravityDirY = -this.currentDirections.upY;
 
             const endX = playerX + gravityDirX * vectorLength;
             const endY = playerY + gravityDirY * vectorLength;
 
-            const gravityColor = 0xff0000; // Röd (Gravitationspilen)
-            this.debugGraphics.lineStyle(3, gravityColor, 1);
+            this.debugGraphics.lineStyle(3, 0xff0000, 1);
             this.debugGraphics.lineBetween(playerX, playerY, endX, endY);
-            this.debugGraphics.fillStyle(gravityColor, 1);
+            this.debugGraphics.fillStyle(0xff0000, 1);
             this.debugGraphics.fillCircle(endX, endY, 4);
 
             // 3. Rita tangent/rörelseriktning i blått
-            const tangentColor = 0x0088ff; // Blå (Rörelseriktning/tangent)
-            const facingSign = this.direction.includes("left") ? -1 : 1;
-            const tangentEndX = playerX + this.currentDirections.tangentX * facingSign * 24;
-            const tangentEndY = playerY + this.currentDirections.tangentY * facingSign * 24;
-            this.debugGraphics.lineStyle(1, tangentColor, 0.8);
+            const tangentEndX = playerX + this.currentDirections.tangentX * vectorLength;
+            const tangentEndY = playerY + this.currentDirections.tangentY * vectorLength;
+            this.debugGraphics.lineStyle(1, 0x0088ff, 0.8);
             this.debugGraphics.lineBetween(playerX, playerY, tangentEndX, tangentEndY);
 
-            // 4. Debug-text
+            // 4. Text för debug
             const direction = this.getDirection();
             this.debugText.setPosition(playerX - 10, playerY - 32);
             this.debugText.setText("Dir: " + direction);
-            this.debugText.setVisible(false);
+            this.debugText.setVisible(true);
         } else {
             this.debugText.setVisible(false);
         }

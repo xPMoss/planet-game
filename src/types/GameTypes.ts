@@ -18,6 +18,7 @@ export const BlockType = {
     GOLD_ORE: 4,
     DIAMOND: 5,
     WOOD: 6,
+    LEAVES: 7,
     CORE: 99,
 } as const;
 
@@ -30,10 +31,4 @@ export interface BlockData {
     hp: number;
     maxHp: number;
     body: Phaser.GameObjects.Image | Phaser.Physics.Matter.Image;
-}
-
-export interface PlanetConfig {
-    radius: number;
-    blockSize: number;
-    gravityStrength: number;
 }

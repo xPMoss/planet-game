@@ -1,8 +1,5 @@
-export interface PlanetConfig {
-  radius: number;
-  blockSize: number;
-  gravityStrength: number;
-}
+export type { PlanetConfig } from "./planetConfig";
+export { DEFAULT_PLANET_CONFIG } from "./planetConfig";
 
 export class SimplexNoise {
   private p: Uint8Array = new Uint8Array(256);

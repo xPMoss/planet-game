@@ -20,11 +20,26 @@ export class Header extends HTMLElement {
             height: "80px",
             zIndex: "1000",
             pointerEvents: "none", // Gör att klick utanför hotbaren går igenom till spelet
+            display: "flex",
+            gap: "8px",
+            justifyContent: "center",
+            alignItems: "center",
         });
 
         // Skapa och lägg till hotbar-elementet
         this.hotbar = document.createElement("hotbar-ui") as Hotbar;
         this.appendChild(this.hotbar);
+
+        const div = document.createElement("div");
+        div.id = "menu-container";
+        div.classList.add("relative", "flex", "gap-2", "mx-auto");
+
+        const block = document.createElement("div");
+        block.classList.add("w-[48px]", "h-[48px]", "bg-red-300");
+        block.innerText = "TEST";
+
+        div.appendChild(block);
+        this.appendChild(div);
     }
 
     public destroy(): void {

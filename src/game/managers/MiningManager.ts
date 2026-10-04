@@ -17,7 +17,6 @@ export class MiningManager {
     private readonly maxMiningDistance: number = 24;
 
     private mineKey: Phaser.Input.Keyboard.Key | null = null;
-
     private canMine: boolean = true;
     private readonly mineCooldownMs: number = 200;
 
@@ -33,8 +32,6 @@ export class MiningManager {
     }
 
     public update(mobileState?: MobileInputState): void {
-        this.updateDebugGraphics();
-
         if (this.mineKey && this.mineKey.isDown) {
             this.mineInFront();
         }
@@ -42,6 +39,8 @@ export class MiningManager {
         if (mobileState && mobileState.primaryAction) {
             this.mineInFront();
         }
+
+        this.updateDebugGraphics();
     }
 
     public mineInFront(): void {
@@ -96,13 +95,27 @@ export class MiningManager {
         const toolPower = useGameStore.getState().currentTool?.power || 0.1;
         block.hp -= toolPower;
 
+        const hpPercent = Math.max(0, block.hp / block.maxHp);
+
+        // 2. Skapa den permanenta skadetonen (går från normal -> röd/mörk ju mer skadat det blir)
+        const red = 255;
+        const green = Math.floor(255 * hpPercent);
+        const blue = Math.floor(255 * hpPercent);
+        const damageTint = (red << 16) | (green << 8) | blue;
+
+        // 3. Tillfällig vit blixt/träffeffekt
         block.body.setTint(0xffffff);
+
+        // 4. Återgå till blockets permanenta skadeton efter 80ms
         this.scene.time.delayedCall(80, () => {
             if (block.body?.active) {
-                block.body.clearTint();
+                if (hpPercent < 1) {
+                    block.body.setTint(damageTint);
+                } else {
+                    block.body.clearTint();
+                }
             }
         });
-
         if (block.hp <= 0) {
             const resourceType = this.mapBlockToResource(type);
             if (resourceType) {
@@ -122,6 +135,7 @@ export class MiningManager {
         if (type === 5) return "diamond";
         return null;
     }
+
     private createDebug() {
         this.debugGraphics = this.scene.add.graphics();
         this.debugText = this.scene.add.text(0, 0, "", {

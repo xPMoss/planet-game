@@ -25,7 +25,7 @@ export class VirtualJoystick extends HTMLElement {
     private thumb!: HTMLDivElement;
     private activePointerId: number | null = null;
 
-    private radius: number = 60;
+    private radius: number = 75;
     private innerThreshold: number = 0.2;
     private outerThreshold: number = 0.6;
 
@@ -41,8 +41,8 @@ export class VirtualJoystick extends HTMLElement {
         style.textContent =
             ":host {" +
             "  position: fixed;" +
-            "  bottom: 40px;" +
-            "  left: 40px;" +
+            "  bottom: 16px;" +
+            "  left: 16px;" +
             "  z-index: 9999;" +
             "  touch-action: none;" +
             "  user-select: none;" +
