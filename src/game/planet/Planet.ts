@@ -3,6 +3,8 @@ import { BlockType, type BlockData } from "types";
 import { SimplexNoise } from "./planetHelpers";
 import { DEFAULT_PLANET_CONFIG, type PlanetConfig } from "./planetConfig";
 import { PlanetOutline, CATEGORY_PLAYER, CATEGORY_TERRAIN, CATEGORY_LOOT } from "./planetOutline";
+import { useGameStore } from "src/store/useGameStore";
+import type { ResourceType } from "types";
 
 export class Planet {
   private scene: Phaser.Scene;
@@ -36,6 +38,7 @@ export class Planet {
     this.createBlockTexture("diamond_tile", 0x00ffff);
     this.createBlockTexture("wood_tile", 0x5c4033);
     this.createBlockTexture("leaves_tile", 0x228b22);
+    this.createBlockTexture("sand_tile", 0xe0c068);
   }
 
   private createBlockTexture(key: string, color: number): void {
@@ -125,26 +128,39 @@ export class Planet {
   }
 
   private generateSurfaceObjects(): void {
-    const surfaceBlocks: { x: number; y: number }[] = [];
     const radius = this.config.radius;
+    const mapSize = radius * 2;
+    const outerSurfaceMap = new Map<string, { x: number; y: number }>();
 
-    this.blocks.forEach((block) => {
-      if (block.type !== BlockType.DIRT) return;
+    const angleSteps = 360;
+    for (let i = 0; i < angleSteps; i++) {
+      const angle = (i * Math.PI * 2) / angleSteps;
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
 
-      const dx = block.x - radius;
-      const dy = block.y - radius;
-      const dist = Math.hypot(dx, dy);
+      let furthestBlock: { x: number; y: number; dist: number } | null = null;
 
-      if (dist === 0) return;
+      for (let r = Math.floor(radius * 0.3); r <= mapSize; r++) {
+        const checkX = Math.floor(radius + dirX * r);
+        const checkY = Math.floor(radius + dirY * r);
+        const key = checkX + "," + checkY;
 
-      const dirX = Math.round(dx / dist);
-      const dirY = Math.round(dy / dist);
-
-      const checkKey = block.x + dirX + "," + (block.y + dirY);
-      if (!this.blocks.has(checkKey)) {
-        surfaceBlocks.push({ x: block.x, y: block.y });
+        const block = this.blocks.get(key);
+        if (block && (block.type === BlockType.DIRT || block.type === BlockType.STONE)) {
+          const dist = Math.hypot(checkX - radius, checkY - radius);
+          if (!furthestBlock || dist > furthestBlock.dist) {
+            furthestBlock = { x: checkX, y: checkY, dist };
+          }
+        }
       }
-    });
+
+      if (furthestBlock) {
+        const surfaceKey = furthestBlock.x + "," + furthestBlock.y;
+        outerSurfaceMap.set(surfaceKey, { x: furthestBlock.x, y: furthestBlock.y });
+      }
+    }
+
+    const surfaceBlocks = Array.from(outerSurfaceMap.values());
 
     for (let i = surfaceBlocks.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -155,7 +171,6 @@ export class Planet {
 
     const maxTrees = 5 + Math.floor(Math.random() * 6);
     let treeCount = 0;
-
     const treePositions: { x: number; y: number }[] = [];
     const minTreeDistance = 8;
 
@@ -174,29 +189,24 @@ export class Planet {
       }
 
       if (Math.random() < 0.1) {
-        const groundKey = surface.x + "," + surface.y;
-        const groundBlock = this.blocks.get(groundKey);
+        const dx = surface.x - radius;
+        const dy = surface.y - radius;
+        const absX = Math.abs(dx);
+        const absY = Math.abs(dy);
 
-        if (groundBlock && groundBlock.type !== BlockType.AIR) {
-          const dx = surface.x - radius;
-          const dy = surface.y - radius;
-          const absX = Math.abs(dx);
-          const absY = Math.abs(dy);
+        let stepX = 0;
+        let stepY = 0;
 
-          let stepX = 0;
-          let stepY = 0;
-
-          if (absX > absY) {
-            stepX = dx > 0 ? 1 : -1;
-          } else {
-            stepY = dy > 0 ? 1 : -1;
-          }
-
-          const targetX = surface.x + stepX;
-          const targetY = surface.y + stepY;
-
-          this.placeBlock(targetX, targetY, BlockType.STONE);
+        if (absX > absY) {
+          stepX = dx > 0 ? 1 : -1;
+        } else {
+          stepY = dy > 0 ? 1 : -1;
         }
+
+        const targetX = surface.x + stepX;
+        const targetY = surface.y + stepY;
+
+        this.placeBlock(targetX, targetY, BlockType.STONE);
       }
     });
   }
@@ -271,6 +281,7 @@ export class Planet {
     if (blockType === BlockType.COAL) return "coal_tile";
     if (blockType === BlockType.WOOD) return "wood_tile";
     if (blockType === BlockType.LEAVES) return "leaves_tile";
+    if (blockType === BlockType.SAND) return "sand_tile";
     return "dirt_tile";
   }
 
@@ -296,6 +307,7 @@ export class Planet {
       block.body.destroy();
       this.blocks.delete(key);
 
+      // Spawna loot-objekt på marken
       this.spawnLoot(x, y, blockType);
 
       if (blockType === BlockType.WOOD || blockType === BlockType.LEAVES) {
@@ -454,10 +466,17 @@ export class Planet {
         const playerDist = Math.hypot(player.x - item.x, player.y - item.y);
 
         if (playerDist <= pickupRadius) {
-          this.scene.events.emit("collect-item", blockType);
-          cleanupListeners();
-          item.destroy();
-          return;
+          const resourceType = this.mapBlockToResource(blockType);
+          if (resourceType) {
+            // Kontrollera om det finns plats i inventoryt innan resursen plockas upp
+            const success = useGameStore.getState().mineBlock(resourceType, 1);
+            if (success) {
+              this.scene.events.emit("collect-item", blockType);
+              cleanupListeners();
+              item.destroy();
+              return;
+            }
+          }
         }
       }
 
@@ -521,6 +540,18 @@ export class Planet {
     };
 
     this.scene.events.on("update", updateListener);
+  }
+
+  private mapBlockToResource(type: BlockType): ResourceType | null {
+    if (type === BlockType.DIRT) return "dirt";
+    if (type === BlockType.STONE) return "stone";
+    if (type === BlockType.COAL) return "coal";
+    if (type === BlockType.IRON_ORE) return "iron_ore";
+    if (type === BlockType.GOLD_ORE) return "gold_ore";
+    if (type === BlockType.DIAMOND) return "diamond";
+    if (type === BlockType.WOOD) return "wood";
+    if (type === BlockType.SAND) return "sand";
+    return null;
   }
 
   public placeBlock(x: number, y: number, blockType: BlockType): boolean {

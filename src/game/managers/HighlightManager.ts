@@ -34,7 +34,7 @@ export class HighlightManager {
         const existingBlock = this.planet.blocks.get(key);
 
         const selectedResource = useGameStore.getState().selectedResource;
-        const inventoryCount = useGameStore.getState().inventory[selectedResource] || 0;
+        const inventoryCount = selectedResource ? useGameStore.getState().inventory[selectedResource] || 0 : 0;
         const isOverlapping = this.isOverlappingPlayer(worldPoint);
         const hasResources = inventoryCount > 0;
 

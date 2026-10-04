@@ -43,7 +43,6 @@ export class VirtualJoystick extends HTMLElement {
             "  position: fixed;" +
             "  bottom: 16px;" +
             "  left: 16px;" +
-            "  z-index: 9999;" +
             "  touch-action: none;" +
             "  user-select: none;" +
             "}" +

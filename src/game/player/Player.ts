@@ -3,6 +3,7 @@ import { Planet } from "planet";
 import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture, createPlayerTexture } from "player";
 import { CATEGORY_PLAYER, CATEGORY_TERRAIN } from "planet";
 import type { MobileInputState } from "ui";
+import { BlockType } from "types";
 
 type Directions = {
     tangentX: number;
@@ -66,9 +67,10 @@ export class Player {
             this.shiftKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
         }
 
-        // Skapa spriten på planetens skapade yta
-        const startX = planet.center.x;
-        const startY = planet.center.y - (planet.config.radius * planet.config.blockSize + 20);
+        // Hitta en säker spawn-position fri från träd och hinder
+        const spawnPos = this.findSpawnPosition();
+        const startX = spawnPos.x;
+        const startY = spawnPos.y;
 
         // Kvadratisk fysikkropp (12x12) så att rotation vid hörn inte trycker in spelaren i marken
         const bodySize = Math.min(this.settings.width, this.settings.height);
@@ -102,6 +104,58 @@ export class Player {
         this.createDebug();
     }
 
+    private findSpawnPosition(): { x: number; y: number } {
+        const radius = this.planet.config.radius;
+        const mapSize = radius * 2;
+        const blockSize = this.planet.config.blockSize;
+
+        let bestGridX = Math.floor(radius);
+        let bestSurfaceY = -1;
+
+        // Sök efter en lämplig kolumn i närheten av mitten (x = radius)
+        for (let offsetX = 0; offsetX < radius; offsetX = offsetX <= 0 ? -offsetX + 1 : -offsetX) {
+            const checkX = Math.floor(radius) + offsetX;
+            if (checkX < 0 || checkX >= mapSize) continue;
+
+            // Hitta det översta blocket i den aktuella kolumnen
+            let highestBlockY = -1;
+            let highestBlockType: BlockType | null = null;
+
+            for (let y = 0; y < mapSize; y++) {
+                const block = this.planet.blocks.get(checkX + "," + y);
+                if (block) {
+                    highestBlockY = y;
+                    highestBlockType = block.type;
+                    break;
+                }
+            }
+
+            // Om det översta blocket är DIRT eller STONE är det säkert att spawna ovanför
+            if (highestBlockY !== -1 && (highestBlockType === BlockType.DIRT || highestBlockType === BlockType.STONE)) {
+                bestGridX = checkX;
+                bestSurfaceY = highestBlockY;
+                break;
+            }
+        }
+
+        // Om ingen ren mark hittades, fall tillbaka på toppen av den mittersta kolumnen
+        if (bestSurfaceY === -1) {
+            for (let y = 0; y < mapSize; y++) {
+                const block = this.planet.blocks.get(Math.floor(radius) + "," + y);
+                if (block) {
+                    bestSurfaceY = y;
+                    break;
+                }
+            }
+        }
+
+        const worldX = bestGridX * blockSize + blockSize / 2;
+        // Placera spelaren precis ovanför det översta blocket
+        const worldY = (bestSurfaceY - 1) * blockSize + blockSize / 2;
+
+        return { x: worldX, y: worldY };
+    }
+
     public spawn(): void {
         if (!this.scene.textures.exists("player_tile")) {
             createPlayerTexture(this.scene, "player_tile", this.settings.bodyColor);
@@ -124,10 +178,27 @@ export class Player {
         return this.direction;
     }
 
+    private isBoarded: boolean = false;
+
+    public setBoarded(boarded: boolean, position?: { x: number; y: number }): void {
+        this.isBoarded = boarded;
+        this.bodySprite?.setVisible(!boarded);
+        this.hat?.setVisible(!boarded);
+        this.eyesGraphics?.setVisible(!boarded);
+        this.sprite.setSensor(boarded);
+        if (position) {
+            this.sprite.setPosition(position.x, position.y);
+            const body = this.sprite.body as MatterJS.BodyType;
+            if (body) {
+                this.scene.matter.body.setPosition(body, position);
+                this.scene.matter.body.setVelocity(body, { x: 0, y: 0 });
+            }
+        }
+    }
+
     public update(
         cursors: Phaser.Types.Input.Keyboard.CursorKeys,
         mobileState?: MobileInputState,
-        keyboard?: Phaser.Input.Keyboard.KeyboardPlugin,
         joystickState?: {
             up: boolean;
             down: boolean;
@@ -136,7 +207,8 @@ export class Player {
             direction?: PlayerDirection | null;
         },
     ): void {
-        this.updatePlayer(cursors, mobileState, keyboard, joystickState);
+        if (this.isBoarded) return;
+        this.updatePlayer(cursors, mobileState, joystickState);
         this.updateBodyPosition();
         this.updateHatPosition();
         this.drawEyes();
@@ -146,7 +218,6 @@ export class Player {
     private updatePlayer(
         cursors: Phaser.Types.Input.Keyboard.CursorKeys,
         mobileState?: MobileInputState,
-        keyboard?: Phaser.Input.Keyboard.KeyboardPlugin,
         joystickState?: {
             up: boolean;
             down: boolean;

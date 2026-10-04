@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { MainScene } from "scenes";
+import { DebugScene, MainScene } from "scenes";
 
 export const PhysicsConfig = {
   // Fysik-iterations för Matter.js (förhindrar penetration)
@@ -32,5 +32,5 @@ export const GameConfig: Phaser.Types.Core.GameConfig = {
       debug: true,
     },
   },
-  scene: [MainScene],
+  scene: [MainScene, DebugScene],
 };

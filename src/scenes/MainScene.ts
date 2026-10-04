@@ -1,21 +1,24 @@
 import Phaser from "phaser";
 import { Planet, DEFAULT_PLANET_CONFIG } from "planet";
 import { Player } from "player";
+import { Rocket } from "../game/rocket";
 import { CameraController } from "camera";
 import { MiningManager, HighlightManager, BuildingManager } from "managers";
 //import { VirtualJoystick } from "phaser-virtual-joystick";
+import { Starfield } from "../game/background/Starfield";
 
 import { Header, MobileControls, VirtualJoystick } from "ui";
 
 export class MainScene extends Phaser.Scene {
   private planet!: Planet;
   private player!: Player;
+  private rocket!: Rocket;
+  private starfield!: Starfield;
   private cameraController!: CameraController;
   private highlightManager!: HighlightManager;
   private miningManager!: MiningManager;
   private buildingManager!: BuildingManager;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keyboard!: Phaser.Input.Keyboard.KeyboardPlugin;
 
   mobileControls!: MobileControls;
   virtualJoystick!: VirtualJoystick;
@@ -39,11 +42,18 @@ export class MainScene extends Phaser.Scene {
     //
     this.planet.generate();
 
+    this.starfield = new Starfield(this, this.planet, 350);
+
     this.player = new Player(this, this.planet);
     this.player.spawn();
 
+    this.rocket = new Rocket(this, this.planet);
+    this.rocket.spawn();
+
     this.cameraController = new CameraController(this, this.planet, this.player);
     this.cameraController.follow(this.player.sprite);
+
+    this.rocket.setPlayerAndCamera(this.player, this.cameraController);
 
     // Initiera Highlight Manager först och skicka med den till Mining och Building
     this.highlightManager = new HighlightManager(this, this.planet, this.player);
@@ -53,7 +63,6 @@ export class MainScene extends Phaser.Scene {
     // Keyboard input
     if (this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
-      this.keyboard = this.input.keyboard;
     }
 
     // UI
@@ -81,7 +90,10 @@ export class MainScene extends Phaser.Scene {
   override update(): void {
     if (!this.player || !this.highlightManager || !this.miningManager || !this.buildingManager) return;
 
-    this.player.update(this.cursors, this.mobileControls?.state, this.keyboard, this.virtualJoystick.state);
+    this.starfield?.update();
+
+    this.player.update(this.cursors, this.mobileControls?.state, this.virtualJoystick.state);
+    this.rocket?.update(this.cursors, this.mobileControls?.state, this.virtualJoystick?.state);
     this.cameraController.update();
 
     // Uppdatera markören samt båda managers med mobiltillståndet
@@ -107,8 +119,8 @@ export class MainScene extends Phaser.Scene {
       lineOpacity?: number;
     };
 
-    debugConfig.showBody = false;
-    debugConfig.showStaticBody = false;
+    debugConfig.showBody = true;
+    debugConfig.showStaticBody = true;
     debugConfig.showVelocity = true;
 
     // Sätt tydliga färger och opacitet för spelaren

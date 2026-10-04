@@ -32,11 +32,12 @@
       "managers": ["./src/game/managers"],
       "player": ["./src/game/player"],
       "planet": ["./src/game/planet"],
+      "rocket": ["./src/game/rocket"],
       "scenes": ["./src/scenes"],
       "ui": ["./src/ui"],
       "store": ["./src/store/*"],
       "types": ["./src/types"],
     },
   },
-  "include": ["src"],
+  "include": ["src", "old/Rocket copy.ts"],
 }

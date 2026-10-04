@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import { Planet } from "planet";
-import { BlockType, type ResourceType } from "types";
+import { BlockType } from "types";
 import type { Player } from "player";
-import { useGameStore } from "@/store/useGameStore";
+import { useGameStore } from "src/store/useGameStore";
 import type { MobileInputState } from "ui";
 import type { HighlightManager } from "managers";
 
@@ -27,12 +27,10 @@ export class BuildingManager {
         this.scene.game.canvas.oncontextmenu = (e) => e.preventDefault();
 
         this.setupInput();
-
         this.createDebug();
     }
 
     public update(mobileState?: MobileInputState): void {
-        // Bygg när tangenten hålls ned
         if (this.buildKey && this.buildKey.isDown) {
             this.placeInFront();
         }
@@ -48,8 +46,9 @@ export class BuildingManager {
         if (!this.canBuild || !this.player?.sprite) return;
 
         const selectedResource = useGameStore.getState().selectedResource;
-        const inventoryCount = useGameStore.getState().inventory[selectedResource] || 0;
+        if (!selectedResource) return;
 
+        const inventoryCount = useGameStore.getState().inventory[selectedResource] || 0;
         if (inventoryCount <= 0) return;
 
         const blockType = this.mapResourceToBlockType(selectedResource);
@@ -97,8 +96,9 @@ export class BuildingManager {
             if (this.isOverlappingPlayer(worldPoint)) return;
 
             const selectedResource = useGameStore.getState().selectedResource;
-            const inventoryCount = useGameStore.getState().inventory[selectedResource] || 0;
+            if (!selectedResource) return;
 
+            const inventoryCount = useGameStore.getState().inventory[selectedResource] || 0;
             if (inventoryCount <= 0) return;
 
             const blockType = this.mapResourceToBlockType(selectedResource);
@@ -117,9 +117,11 @@ export class BuildingManager {
         return playerBounds.contains(worldPoint.x, worldPoint.y);
     }
 
-    private mapResourceToBlockType(resource: ResourceType): BlockType | null {
+    private mapResourceToBlockType(resource: string | null): BlockType | null {
         if (resource === "dirt") return BlockType.DIRT;
         if (resource === "stone") return BlockType.STONE;
+        if (resource === "wood") return BlockType.WOOD;
+        if (resource === "sand") return BlockType.SAND;
         if (resource === "core") return BlockType.CORE;
         if (resource === "coal") return BlockType.COAL;
         if (resource === "iron_ore") return BlockType.IRON_ORE;

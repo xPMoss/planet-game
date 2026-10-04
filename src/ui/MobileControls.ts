@@ -90,7 +90,7 @@ export class MobileControls extends HTMLElement {
             "text-4xl",
             "p-4",
             "pointer-events-none",
-            "z-10",
+            "z-500",
             "rounded-3xl",
         );
 

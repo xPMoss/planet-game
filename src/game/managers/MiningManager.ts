@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { Planet } from "planet";
-import type { BlockType, ResourceType } from "src/types/GameTypes";
+import { BlockType, REQUIRED_TOOL_TYPE, REQUIRED_TOOL_POWER } from "types";
 import type { Player } from "player";
 import { useGameStore } from "src/store/useGameStore";
 import type { MobileInputState } from "ui";
@@ -27,7 +27,6 @@ export class MiningManager {
         this.highlightManager = highlightManager;
 
         this.setupInput();
-
         this.createDebug();
     }
 
@@ -46,6 +45,9 @@ export class MiningManager {
     public mineInFront(): void {
         if (!this.canMine || !this.player?.sprite) return;
 
+        const currentTool = useGameStore.getState().currentTool;
+        if (!currentTool) return;
+
         const target = this.highlightManager.getTargetGridPosition();
         if (!target) return;
 
@@ -53,7 +55,7 @@ export class MiningManager {
         const block = this.planet.blocks.get(key);
 
         if (block) {
-            this.mineBlock(target.gridX, target.gridY, block.type);
+            this.damageBlock(target.gridX, target.gridY);
 
             this.canMine = false;
             this.scene.time.delayedCall(this.mineCooldownMs, () => {
@@ -71,6 +73,9 @@ export class MiningManager {
         }
 
         this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+            const currentTool = useGameStore.getState().currentTool;
+            if (!currentTool) return;
+
             const worldPoint = pointer.positionToCamera(this.scene.cameras.main) as Phaser.Math.Vector2;
             const playerPos = new Phaser.Math.Vector2(this.player.sprite.x, this.player.sprite.y);
 
@@ -82,31 +87,49 @@ export class MiningManager {
 
             const block = this.planet.blocks.get(key);
             if (block) {
-                this.mineBlock(gridX, gridY, block.type);
+                this.damageBlock(gridX, gridY);
             }
         });
     }
 
-    private mineBlock(x: number, y: number, type: BlockType): void {
+    public damageBlock(x: number, y: number): void {
         const key = x + "," + y;
         const block = this.planet.blocks.get(key);
         if (!block) return;
 
-        const toolPower = useGameStore.getState().currentTool?.power || 0.1;
-        block.hp -= toolPower;
+        const currentTool = useGameStore.getState().currentTool;
+        if (!currentTool) return;
+
+        const requiredType = REQUIRED_TOOL_TYPE[block.type] ?? "none";
+        const requiredPower = REQUIRED_TOOL_POWER[block.type] ?? 0;
+
+        const hasCorrectType = requiredType === "none" || currentTool.type === requiredType;
+        const hasCorrectPower = currentTool.power >= requiredPower;
+
+        // Om fel verktygstyp eller för låg power -> Blinka rött och avbryt
+        if (!hasCorrectType || !hasCorrectPower) {
+            block.body.setTint(0xff0000);
+            this.scene.time.delayedCall(100, () => {
+                if (block.body?.active) {
+                    block.body.clearTint();
+                }
+            });
+            return;
+        }
+
+        // Applicera skada på blocket
+        block.hp -= currentTool.power;
 
         const hpPercent = Math.max(0, block.hp / block.maxHp);
 
-        // 2. Skapa den permanenta skadetonen (går från normal -> röd/mörk ju mer skadat det blir)
         const red = 255;
         const green = Math.floor(255 * hpPercent);
         const blue = Math.floor(255 * hpPercent);
         const damageTint = (red << 16) | (green << 8) | blue;
 
-        // 3. Tillfällig vit blixt/träffeffekt
+        // Träffeffekt (vit blixt)
         block.body.setTint(0xffffff);
 
-        // 4. Återgå till blockets permanenta skadeton efter 80ms
         this.scene.time.delayedCall(80, () => {
             if (block.body?.active) {
                 if (hpPercent < 1) {
@@ -116,24 +139,10 @@ export class MiningManager {
                 }
             }
         });
-        if (block.hp <= 0) {
-            const resourceType = this.mapBlockToResource(type);
-            if (resourceType) {
-                useGameStore.getState().mineBlock(resourceType, 1);
-            }
 
+        if (block.hp <= 0) {
             this.planet.removeBlock(x, y);
         }
-    }
-
-    private mapBlockToResource(type: BlockType): ResourceType | null {
-        if (type === 0) return "dirt";
-        if (type === 1) return "stone";
-        if (type === 2) return "coal";
-        if (type === 3) return "iron_ore";
-        if (type === 4) return "gold_ore";
-        if (type === 5) return "diamond";
-        return null;
     }
 
     private createDebug() {
