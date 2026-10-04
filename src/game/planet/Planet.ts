@@ -276,6 +276,8 @@ export class Planet {
     if (blockType === BlockType.CORE) return "core_tile";
     if (blockType === BlockType.STONE) return "stone_tile";
     if (blockType === BlockType.IRON_ORE) return "iron_ore_tile";
+    if (blockType === BlockType.COPPER_ORE) return "copper_ore_tile";
+    if (blockType === BlockType.SILVER_ORE) return "silver_ore_tile";
     if (blockType === BlockType.GOLD_ORE) return "gold_ore_tile";
     if (blockType === BlockType.DIAMOND) return "diamond_tile";
     if (blockType === BlockType.COAL) return "coal_tile";
@@ -547,6 +549,8 @@ export class Planet {
     if (type === BlockType.STONE) return "stone";
     if (type === BlockType.COAL) return "coal";
     if (type === BlockType.IRON_ORE) return "iron_ore";
+    if (type === BlockType.COPPER_ORE) return "copper_ore";
+    if (type === BlockType.SILVER_ORE) return "silver_ore";
     if (type === BlockType.GOLD_ORE) return "gold_ore";
     if (type === BlockType.DIAMOND) return "diamond";
     if (type === BlockType.WOOD) return "wood";

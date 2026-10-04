@@ -1,17 +1,32 @@
 // Item & Resource Types
-export type ResourceType = "wood" | "dirt" | "stone" | "coal" | "iron_ore" | "iron_ingot" | "gold_ore" | "diamond" | "core" | "sand";
+export type ResourceType =
+    | "dirt"
+    | "stone"
+    | "coal"
+    | "copper_ore"
+    | "copper"
+    | "copper_ingot"
+    | "silver_ore" // <--- Lägg till
+    | "silver" // <--- Lägg till
+    | "silver_ingot" // <--- Lägg till
+    | "iron_ore"
+    | "iron_ingot"
+    | "gold_ore"
+    | "gold_ingot"
+    | "diamond"
+    | "wood"
+    | "sand"
+    | "core";
+
 export type ToolType =
     | "Wood Pickaxe"
     | "Iron Pickaxe"
-    | "Gold Pickaxe"
     | "Diamond Pickaxe"
     | "Wood Axe"
     | "Iron Axe"
-    | "Gold Axe"
     | "Diamond Axe"
     | "Wood Shovel"
     | "Iron Shovel"
-    | "Gold Shovel"
     | "Diamond Shovel";
 
 export interface Tool {
@@ -19,6 +34,7 @@ export interface Tool {
     power: number;
     price: number;
     type: "pickaxe" | "axe" | "shovel";
+    speed?: number; // Hastighetsmultiplikator eller cooldown i ms
 }
 
 // Planet & Block Types
@@ -28,11 +44,13 @@ export const BlockType = {
     STONE: 1,
     COAL: 2,
     IRON_ORE: 3,
-    GOLD_ORE: 4,
-    DIAMOND: 5,
-    WOOD: 6,
-    LEAVES: 7,
-    SAND: 8,
+    COPPER_ORE: 4,
+    SILVER_ORE: 5,
+    GOLD_ORE: 6,
+    DIAMOND: 7,
+    WOOD: 8,
+    LEAVES: 9,
+    SAND: 10,
     CORE: 99,
 } as const;
 
@@ -48,6 +66,9 @@ export const REQUIRED_TOOL_TYPE: Record<BlockType, "pickaxe" | "axe" | "shovel" 
     [BlockType.STONE]: "pickaxe", // Kräver Hacka
     [BlockType.COAL]: "pickaxe",
     [BlockType.IRON_ORE]: "pickaxe",
+    [BlockType.COPPER_ORE]: "pickaxe",
+    [BlockType.SILVER_ORE]: "pickaxe",
+
     [BlockType.GOLD_ORE]: "pickaxe",
     [BlockType.DIAMOND]: "pickaxe",
     [BlockType.CORE]: "none",
@@ -63,6 +84,8 @@ export const REQUIRED_TOOL_POWER: Record<BlockType, number> = {
     [BlockType.STONE]: 0.1, // Kräver minst Wood Pickaxe
     [BlockType.COAL]: 0.1,
     [BlockType.IRON_ORE]: 1,
+    [BlockType.COPPER_ORE]: 1,
+    [BlockType.SILVER_ORE]: 1,
     [BlockType.GOLD_ORE]: 5,
     [BlockType.DIAMOND]: 10,
     [BlockType.CORE]: 999,

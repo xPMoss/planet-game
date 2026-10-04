@@ -4,22 +4,19 @@ export const MAX_INVENTORY_SLOTS = 20;
 
 export const ALL_TOOLS: Record<ToolType, Tool> = {
     // Pickaxes
-    "Wood Pickaxe": { name: "Wood Pickaxe", power: 0.1, price: 0, type: "pickaxe" },
-    "Iron Pickaxe": { name: "Iron Pickaxe", power: 1, price: 10, type: "pickaxe" },
-    "Gold Pickaxe": { name: "Gold Pickaxe", power: 5, price: 50, type: "pickaxe" },
-    "Diamond Pickaxe": { name: "Diamond Pickaxe", power: 10, price: 100, type: "pickaxe" },
+    "Wood Pickaxe": { name: "Wood Pickaxe", power: 0.1, price: 0, type: "pickaxe", speed: 200 },
+    "Iron Pickaxe": { name: "Iron Pickaxe", power: 1, price: 10, type: "pickaxe", speed: 150 },
+    "Diamond Pickaxe": { name: "Diamond Pickaxe", power: 10, price: 100, type: "pickaxe", speed: 50 },
 
     // Axes
-    "Wood Axe": { name: "Wood Axe", power: 0.1, price: 0, type: "axe" },
-    "Iron Axe": { name: "Iron Axe", power: 1, price: 10, type: "axe" },
-    "Gold Axe": { name: "Gold Axe", power: 5, price: 50, type: "axe" },
-    "Diamond Axe": { name: "Diamond Axe", power: 10, price: 100, type: "axe" },
+    "Wood Axe": { name: "Wood Axe", power: 0.1, price: 0, type: "axe", speed: 200 },
+    "Iron Axe": { name: "Iron Axe", power: 1, price: 10, type: "axe", speed: 150 },
+    "Diamond Axe": { name: "Diamond Axe", power: 10, price: 100, type: "axe", speed: 50 },
 
     // Spades
-    "Wood Shovel": { name: "Wood Spade", power: 0.1, price: 0, type: "shovel" },
-    "Iron Shovel": { name: "Iron Spade", power: 1, price: 10, type: "shovel" },
-    "Gold Shovel": { name: "Gold Spade", power: 5, price: 50, type: "shovel" },
-    "Diamond Shovel": { name: "Diamond Spade", power: 10, price: 100, type: "shovel" },
+    "Wood Shovel": { name: "Wood Shovel", power: 0.1, price: 0, type: "shovel", speed: 200 },
+    "Iron Shovel": { name: "Iron Shovel", power: 1, price: 10, type: "shovel", speed: 150 },
+    "Diamond Shovel": { name: "Diamond Shovel", power: 10, price: 100, type: "shovel", speed: 50 },
 };
 
 export interface GameState {

@@ -18,7 +18,7 @@ export class MiningManager {
 
     private mineKey: Phaser.Input.Keyboard.Key | null = null;
     private canMine: boolean = true;
-    private readonly mineCooldownMs: number = 200;
+    private readonly defaultMineCooldownMs: number = 200;
 
     constructor(scene: Phaser.Scene, planet: Planet, player: Player, highlightManager: HighlightManager) {
         this.scene = scene;
@@ -57,8 +57,11 @@ export class MiningManager {
         if (block) {
             this.damageBlock(target.gridX, target.gridY);
 
+            // Använd verktygets speed om det finns, annars standard-cooldown
+            const cooldown = currentTool.speed ?? this.defaultMineCooldownMs;
+
             this.canMine = false;
-            this.scene.time.delayedCall(this.mineCooldownMs, () => {
+            this.scene.time.delayedCall(cooldown, () => {
                 this.canMine = true;
             });
         }

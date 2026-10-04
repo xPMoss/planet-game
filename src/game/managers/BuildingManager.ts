@@ -125,6 +125,9 @@ export class BuildingManager {
         if (resource === "core") return BlockType.CORE;
         if (resource === "coal") return BlockType.COAL;
         if (resource === "iron_ore") return BlockType.IRON_ORE;
+        if (resource === "copper_ore") return BlockType.COPPER_ORE;
+        if (resource === "silver_ore") return BlockType.SILVER_ORE;
+
         if (resource === "gold_ore") return BlockType.GOLD_ORE;
         if (resource === "diamond") return BlockType.DIAMOND;
         return null;
