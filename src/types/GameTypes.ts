@@ -18,25 +18,6 @@ export type ResourceType =
     | "sand"
     | "core";
 
-export type ToolType =
-    | "Wood Pickaxe"
-    | "Iron Pickaxe"
-    | "Diamond Pickaxe"
-    | "Wood Axe"
-    | "Iron Axe"
-    | "Diamond Axe"
-    | "Wood Shovel"
-    | "Iron Shovel"
-    | "Diamond Shovel";
-
-export interface Tool {
-    name: string;
-    power: number;
-    price: number;
-    type: "pickaxe" | "axe" | "shovel";
-    speed?: number; // Hastighetsmultiplikator eller cooldown i ms
-}
-
 // Planet & Block Types
 export const BlockType = {
     AIR: -1,
@@ -55,6 +36,36 @@ export const BlockType = {
 } as const;
 
 export type BlockType = (typeof BlockType)[keyof typeof BlockType];
+
+export type ToolType =
+    | "Wood Pickaxe"
+    | "Iron Pickaxe"
+    | "Diamond Pickaxe"
+    | "Wood Axe"
+    | "Iron Axe"
+    | "Diamond Axe"
+    | "Wood Shovel"
+    | "Iron Shovel"
+    | "Diamond Shovel";
+
+export interface Tool {
+    name: string;
+    power: number;
+    damage: number;
+    price: number;
+    type: "pickaxe" | "axe" | "shovel";
+    speed?: number; // Hastighetsmultiplikator eller cooldown i ms
+}
+
+export type EquipmentSlot = "helmet" | "chest" | "boots";
+
+export interface ArmorItem {
+    name: string;
+    slot: EquipmentSlot;
+    armor: number; // Ger skydd / minskar skada
+    speedBonus?: number; // T.ex. skor som gör att man springer snabbare
+    color: number; // Färg som ritas på spelaren
+}
 
 // Krav på verktygstyp för respektive block
 export const REQUIRED_TOOL_TYPE: Record<BlockType, "pickaxe" | "axe" | "shovel" | "none"> = {

@@ -23,7 +23,7 @@ export class ToolSlot extends HTMLElement {
         Object.assign(this.button.style, {
             width: "48px",
             height: "48px",
-            borderRadius: "8px",
+            borderRadius: "6px",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",

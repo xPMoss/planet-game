@@ -31,6 +31,7 @@ export class MainScene extends Phaser.Scene {
   preload(): void {
     this.planet = new Planet(this, {
       ...DEFAULT_PLANET_CONFIG,
+      planetType: "EARTH", // Try "ICE", "DESERT", or "EARTH"
     });
     this.planet.createTextures();
   }

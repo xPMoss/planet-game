@@ -1,17 +1,36 @@
-import { create } from "zustand";
-import { ALL_TOOLS, MAX_INVENTORY_SLOTS, type GameState } from "./gameStoreTypes";
-import { findToolByName, calculateTotalItems, updateHotbarWithResource } from "./gameStoreHelpers";
+// src/store/useGameStore.ts
 
-export { ALL_TOOLS, MAX_INVENTORY_SLOTS };
+import { create } from "zustand";
+import { ALL_TOOLS, ALL_ARMOR, MAX_INVENTORY_SLOTS, type GameState } from "./gameStoreTypes";
+import { findToolByName, calculateTotalItems, updateHotbarWithResource } from "./gameStoreHelpers";
+import { RESOURCE_INFO } from "ui";
+
+export { ALL_TOOLS, ALL_ARMOR, MAX_INVENTORY_SLOTS };
 
 export const useGameStore = create<GameState>((set, get) => ({
     hp: 100,
     maxHp: 100,
-    takeDamage: (amount) => set((state) => ({ hp: Math.max(0, state.hp - amount) })),
+    takeDamage: (amount) =>
+        set((state) => {
+            const totalArmor = Object.values(state.equipment).reduce((acc, item) => acc + (item ? item.armor : 0), 0);
+            const damageAfterArmor = Math.max(1, amount - totalArmor);
+            return { hp: Math.max(0, state.hp - damageAfterArmor) };
+        }),
     heal: (amount) => set((state) => ({ hp: Math.min(state.maxHp, state.hp + amount) })),
 
     inventory: {
+        // Startverktyg
         "Wood Pickaxe": 1,
+        "Iron Pickaxe": 1,
+        "Diamond Pickaxe": 1,
+        "Wood Axe": 1,
+        "Iron Axe": 1,
+        "Wood Shovel": 1,
+
+        // Rustning
+        "Iron Helmet": 1,
+        "Leather Clothes": 1,
+        "Speed Boots": 1,
         wood: 0,
         dirt: 0,
         stone: 0,
@@ -30,6 +49,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
     maxSlots: MAX_INVENTORY_SLOTS,
     currentTool: ALL_TOOLS["Wood Pickaxe"],
+
+    equipment: {
+        helmet: null,
+        chest: null,
+        boots: null,
+    },
+
+    equipArmor: (slot, item) =>
+        set((state) => ({
+            equipment: {
+                ...state.equipment,
+                [slot]: item,
+            },
+        })),
 
     equipTool: (toolName) => {
         const tool = findToolByName(toolName);
@@ -95,8 +128,24 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     setHotbarSlot: (index, resource) => {
+        if (resource) {
+            const info = RESOURCE_INFO[resource];
+            if (info && (info.isTool || info.isArmor)) {
+                return;
+            }
+        }
+
         const state = get();
         const newHotbar = [...state.hotbar];
+
+        // Om resursen redan finns i hotbaren, rensa den tidigare sloten (flytta istället för duplicera)
+        if (resource) {
+            const existingIndex = newHotbar.indexOf(resource);
+            if (existingIndex !== -1 && existingIndex !== index) {
+                newHotbar[existingIndex] = null;
+            }
+        }
+
         newHotbar[index] = resource;
         set({
             hotbar: newHotbar,

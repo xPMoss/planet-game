@@ -11,7 +11,7 @@ export const RESOURCE_COLORS: Record<string, string> = {
     core: "#ff4500",
 };
 
-export const RESOURCE_INFO: Record<string, { name: string; color?: string; isTool?: boolean }> = {
+export const RESOURCE_INFO: Record<string, { name: string; color?: string; isTool?: boolean; isArmor?: boolean }> = {
     dirt: { name: "Jord", color: RESOURCE_COLORS.dirt },
     stone: { name: "Sten", color: RESOURCE_COLORS.stone },
     coal: { name: "Kol", color: RESOURCE_COLORS.coal },
@@ -40,4 +40,10 @@ export const RESOURCE_INFO: Record<string, { name: string; color?: string; isToo
     "Iron Shovel": { name: "Iron Shovel", isTool: true },
     "Gold Shovel": { name: "Gold Shovel", isTool: true },
     "Diamond Shovel": { name: "Diamond Shovel", isTool: true },
+
+    // Rustning
+    "Iron Helmet": { name: "Iron Helmet", isArmor: true },
+    "Leather Clothes": { name: "Leather Clothes", isArmor: true },
+    "Iron Clothes": { name: "Iron Clothes", isArmor: true },
+    "Speed Boots": { name: "Speed Boots", isArmor: true },
 };

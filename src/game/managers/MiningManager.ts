@@ -121,7 +121,7 @@ export class MiningManager {
         }
 
         // Applicera skada på blocket
-        block.hp -= currentTool.power;
+        block.hp -= currentTool.damage;
 
         const hpPercent = Math.max(0, block.hp / block.maxHp);
 

@@ -2,21 +2,30 @@ import Phaser from "phaser";
 import { BlockType, type BlockData } from "types";
 import { SimplexNoise } from "./planetHelpers";
 import { DEFAULT_PLANET_CONFIG, type PlanetConfig } from "./planetConfig";
-import { PlanetOutline, CATEGORY_PLAYER, CATEGORY_TERRAIN, CATEGORY_LOOT } from "./planetOutline";
+import { PlanetOutline, CATEGORY_TERRAIN, CATEGORY_LOOT } from "./planetOutline";
+import { PLANET_BIOMES, type PlanetType, type PlanetBiomeConfig } from "./planetConfig";
 import { useGameStore } from "src/store/useGameStore";
 import type { ResourceType } from "types";
 
+export interface ExtendedPlanetConfig extends PlanetConfig {
+  planetType?: PlanetType;
+}
+
 export class Planet {
   private scene: Phaser.Scene;
-  public config: PlanetConfig;
+  public config: ExtendedPlanetConfig;
+  public biome: PlanetBiomeConfig;
   public center: { x: number; y: number };
   private noise: SimplexNoise = new SimplexNoise();
   public blocks: Map<string, BlockData> = new Map();
   private outline!: PlanetOutline;
 
-  constructor(scene: Phaser.Scene, config: Partial<PlanetConfig> = {}) {
+  constructor(scene: Phaser.Scene, config: Partial<ExtendedPlanetConfig> = {}) {
     this.scene = scene;
-    this.config = Object.assign({}, DEFAULT_PLANET_CONFIG, config);
+    this.config = Object.assign({}, DEFAULT_PLANET_CONFIG, { planetType: "EARTH" }, config);
+
+    const type = this.config.planetType || "EARTH";
+    this.biome = PLANET_BIOMES[type];
 
     const totalPixels = this.config.radius * 2 * this.config.blockSize;
     this.center = {
@@ -28,9 +37,11 @@ export class Planet {
   }
 
   public createTextures(): void {
-    this.createBlockTexture("dirt_tile", 0x8b5a2b);
-    this.createBlockTexture("stone_tile", 0x808080);
-    this.createBlockTexture("core_tile", 0xff4500);
+    const colors = this.biome.colors;
+
+    this.createBlockTexture("dirt_tile", colors.dirt_tile || 0x8b5a2b);
+    this.createBlockTexture("stone_tile", colors.stone_tile || 0x808080);
+    this.createBlockTexture("core_tile", colors.core_tile || 0xff4500);
     this.createBlockTexture("player_tile", 0x00ff00);
     this.createBlockTexture("coal_tile", 0x000000);
     this.createBlockTexture("iron_ore_tile", 0x808080);
@@ -38,7 +49,7 @@ export class Planet {
     this.createBlockTexture("diamond_tile", 0x00ffff);
     this.createBlockTexture("wood_tile", 0x5c4033);
     this.createBlockTexture("leaves_tile", 0x228b22);
-    this.createBlockTexture("sand_tile", 0xe0c068);
+    this.createBlockTexture("sand_tile", colors.sand_tile || 0xe0c068);
   }
 
   private createBlockTexture(key: string, color: number): void {
@@ -87,11 +98,11 @@ export class Planet {
 
           if (!isCave) {
             if (distance <= Math.max(2, radius * coreRadiusRatio)) {
-              blockType = BlockType.CORE;
+              blockType = this.biome.coreBlock;
             } else if (distance <= dynamicRadius * stoneRadiusRatio) {
-              blockType = BlockType.STONE;
+              blockType = this.getOreOrBlock(this.biome.deepBlock);
             } else {
-              blockType = BlockType.DIRT;
+              blockType = this.biome.surfaceBlock;
             }
           }
         }
@@ -123,8 +134,25 @@ export class Planet {
       }
     }
 
-    this.generateSurfaceObjects();
+    if (this.biome.decorations && this.biome.decorations.length > 0) {
+      this.generateSurfaceObjects();
+    }
+
     this.drawOutline();
+  }
+
+  private getOreOrBlock(defaultBlock: BlockType): BlockType {
+    const rand = Math.random();
+    let cumulative = 0;
+
+    for (const ore of this.biome.ores) {
+      cumulative += ore.chance;
+      if (rand < cumulative) {
+        return ore.type;
+      }
+    }
+
+    return defaultBlock;
   }
 
   private generateSurfaceObjects(): void {
@@ -146,7 +174,7 @@ export class Planet {
         const key = checkX + "," + checkY;
 
         const block = this.blocks.get(key);
-        if (block && (block.type === BlockType.DIRT || block.type === BlockType.STONE)) {
+        if (block && (block.type === BlockType.DIRT || block.type === BlockType.STONE || block.type === BlockType.SAND)) {
           const dist = Math.hypot(checkX - radius, checkY - radius);
           if (!furthestBlock || dist > furthestBlock.dist) {
             furthestBlock = { x: checkX, y: checkY, dist };
@@ -309,7 +337,6 @@ export class Planet {
       block.body.destroy();
       this.blocks.delete(key);
 
-      // Spawna loot-objekt på marken
       this.spawnLoot(x, y, blockType);
 
       if (blockType === BlockType.WOOD || blockType === BlockType.LEAVES) {
@@ -470,7 +497,6 @@ export class Planet {
         if (playerDist <= pickupRadius) {
           const resourceType = this.mapBlockToResource(blockType);
           if (resourceType) {
-            // Kontrollera om det finns plats i inventoryt innan resursen plockas upp
             const success = useGameStore.getState().mineBlock(resourceType, 1);
             if (success) {
               this.scene.events.emit("collect-item", blockType);

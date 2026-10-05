@@ -4,6 +4,7 @@ import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture, c
 import { CATEGORY_PLAYER, CATEGORY_TERRAIN } from "planet";
 import type { MobileInputState } from "ui";
 import { BlockType } from "types";
+import { useGameStore } from "src/store/useGameStore";
 
 type Directions = {
     tangentX: number;
@@ -38,6 +39,7 @@ export class Player {
     private bodySprite!: Phaser.GameObjects.Sprite; // Separat visningsgrafik för kroppen
     private hat!: Phaser.GameObjects.Sprite;
     private eyesGraphics!: Phaser.GameObjects.Graphics;
+    private armorGraphics!: Phaser.GameObjects.Graphics; // Grafik för utrustning (hjälm, kläder, skor)
     private direction: PlayerDirection = "right";
 
     // Stabil vinkel för gravitation och rotation
@@ -172,6 +174,9 @@ export class Player {
         }
 
         this.eyesGraphics = this.scene.add.graphics();
+
+        this.armorGraphics = this.scene.add.graphics();
+        this.armorGraphics.setDepth(11);
     }
 
     public getDirection(): PlayerDirection {
@@ -185,6 +190,7 @@ export class Player {
         this.bodySprite?.setVisible(!boarded);
         this.hat?.setVisible(!boarded);
         this.eyesGraphics?.setVisible(!boarded);
+        this.armorGraphics?.setVisible(!boarded);
         this.sprite.setSensor(boarded);
         if (position) {
             this.sprite.setPosition(position.x, position.y);
@@ -212,6 +218,7 @@ export class Player {
         this.updateBodyPosition();
         this.updateHatPosition();
         this.drawEyes();
+        this.drawEquipment();
         this.updateDebugGraphics();
     }
 
@@ -269,6 +276,11 @@ export class Player {
         const shouldMoveLeft = !isHoldingShift && (isLeft || Boolean(joystickState?.left));
         const shouldMoveRight = !isHoldingShift && (isRight || Boolean(joystickState?.right));
 
+        // Hastighetsmultiplikator baserad på skor
+        const boots = useGameStore.getState().equipment.boots;
+        const speedMultiplier = boots && boots.speedBonus ? boots.speedBonus : 1;
+        const effectiveMoveSpeed = this.settings.moveSpeed * speedMultiplier;
+
         if (!this.isClimbing) {
             if (shouldMoveLeft || shouldMoveRight) {
                 const dirSign = shouldMoveRight ? 1 : -1;
@@ -284,8 +296,8 @@ export class Player {
                 }
 
                 this.sprite.setVelocity(
-                    moveX * this.settings.moveSpeed + directions.currentVelocity.x * 0.1,
-                    moveY * this.settings.moveSpeed + directions.currentVelocity.y * 0.1,
+                    moveX * effectiveMoveSpeed + directions.currentVelocity.x * 0.1,
+                    moveY * effectiveMoveSpeed + directions.currentVelocity.y * 0.1,
                 );
             } else {
                 const body = this.sprite.body as MatterJS.BodyType;
@@ -562,6 +574,35 @@ export class Player {
         this.eyesGraphics.fillStyle(0x000000, 1);
         this.eyesGraphics.fillRect(-12 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
         this.eyesGraphics.fillRect(8 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
+    }
+
+    private drawEquipment(): void {
+        if (!this.armorGraphics || !this.sprite) return;
+
+        this.armorGraphics.clear();
+        this.armorGraphics.setPosition(this.sprite.x, this.sprite.y);
+        this.armorGraphics.setRotation(this.sprite.rotation);
+
+        const equipment = useGameStore.getState().equipment;
+
+        // 1. Kläder (Chest)
+        if (equipment.chest) {
+            this.armorGraphics.fillStyle(equipment.chest.color, 1);
+            this.armorGraphics.fillRect(-6, -4, 12, 8);
+        }
+
+        // 2. Skor (Boots)
+        if (equipment.boots) {
+            this.armorGraphics.fillStyle(equipment.boots.color, 1);
+            this.armorGraphics.fillRect(-6, 4, 5, 4);
+            this.armorGraphics.fillRect(1, 4, 5, 4);
+        }
+
+        // 3. Hjälm (Helmet)
+        if (equipment.helmet) {
+            this.armorGraphics.fillStyle(equipment.helmet.color, 1);
+            this.armorGraphics.fillRect(-7, -10, 14, 5);
+        }
     }
 
     private createDebug() {

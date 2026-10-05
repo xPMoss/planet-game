@@ -11,7 +11,7 @@ export class HealthBar extends HTMLElement {
     }
 
     private setupStyles(): void {
-        this.classList.add("relative", "flex", "items-center", "w-full", "px-2");
+        this.classList.add("flex", "items-center", "min-w-[340px]", "max-w-[340px]");
         Object.assign(this.style, {
             userSelect: "none",
             pointerEvents: "auto",
