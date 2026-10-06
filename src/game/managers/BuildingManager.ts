@@ -2,15 +2,17 @@ import Phaser from "phaser";
 import { Planet } from "planet";
 import { BlockType } from "types";
 import type { Player } from "player";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 import type { MobileInputState } from "ui";
 import type { HighlightManager } from "managers";
+import type { HouseManager } from "../house/HouseManager";
 
 export class BuildingManager {
     private scene: Phaser.Scene;
     private planet: Planet;
     private player: Player;
     private highlightManager: HighlightManager;
+    private houseManager: HouseManager;
     private maxBuildDistance: number = 48;
     private debugGraphics!: Phaser.GameObjects.Graphics;
 
@@ -18,11 +20,12 @@ export class BuildingManager {
     private canBuild: boolean = true;
     private readonly buildCooldownMs: number = 200;
 
-    constructor(scene: Phaser.Scene, planet: Planet, player: Player, highlightManager: HighlightManager) {
+    constructor(scene: Phaser.Scene, planet: Planet, player: Player, highlightManager: HighlightManager, houseManager: HouseManager) {
         this.scene = scene;
         this.planet = planet;
         this.player = player;
         this.highlightManager = highlightManager;
+        this.houseManager = houseManager;
 
         this.scene.game.canvas.oncontextmenu = (e) => e.preventDefault();
 
@@ -66,6 +69,7 @@ export class BuildingManager {
 
         if (success) {
             useGameStore.getState().removeResource(selectedResource, 1);
+            this.houseManager?.checkForHouseAt(target.gridX, target.gridY);
 
             this.canBuild = false;
             this.scene.time.delayedCall(this.buildCooldownMs, () => {
@@ -108,6 +112,12 @@ export class BuildingManager {
 
             if (success) {
                 useGameStore.getState().removeResource(selectedResource, 1);
+                this.houseManager?.checkForHouseAt(gridX, gridY);
+
+                this.canBuild = false;
+                this.scene.time.delayedCall(this.buildCooldownMs, () => {
+                    this.canBuild = true;
+                });
             }
         });
     }
@@ -127,9 +137,11 @@ export class BuildingManager {
         if (resource === "iron_ore") return BlockType.IRON_ORE;
         if (resource === "copper_ore") return BlockType.COPPER_ORE;
         if (resource === "silver_ore") return BlockType.SILVER_ORE;
-
         if (resource === "gold_ore") return BlockType.GOLD_ORE;
         if (resource === "diamond") return BlockType.DIAMOND;
+        if (resource === "chest") return BlockType.CHEST;
+        if (resource === "bed") return BlockType.BED;
+        if (resource === "torch") return BlockType.TORCH;
         return null;
     }
 

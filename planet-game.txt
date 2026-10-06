@@ -29,8 +29,15 @@ planet-game/
 │   │   ├── camera
 │   │   │   ├── Camera.ts
 │   │   │   └── index.ts
+│   │   ├── house
+│   │   │   ├── House.ts
+│   │   │   ├── HouseBlueprint.ts
+│   │   │   ├── HouseManager.ts
+│   │   │   ├── PlacedBlueprint.ts
+│   │   │   └── index.ts
 │   │   ├── managers
 │   │   │   ├── BuildingManager.ts
+│   │   │   ├── CombatManager.ts
 │   │   │   ├── HighlightManager.ts
 │   │   │   ├── MiningManager.ts
 │   │   │   └── index.ts
@@ -59,6 +66,7 @@ planet-game/
 │   ├── store
 │   │   ├── gameStoreHelpers.ts
 │   │   ├── gameStoreTypes.ts
+│   │   ├── index.ts
 │   │   └── useGameStore.ts
 │   ├── style.css
 │   ├── types
@@ -1491,12 +1499,13 @@ module.exports = {
       "src/*": ["./src/*"],
       "camera": ["./src/game/camera"],
       "managers": ["./src/game/managers"],
+      "house": ["./src/game/house"],
       "player": ["./src/game/player"],
       "planet": ["./src/game/planet"],
       "rocket": ["./src/game/rocket"],
       "scenes": ["./src/scenes"],
       "ui": ["./src/ui"],
-      "store": ["./src/store/*"],
+      "store": ["./src/store"],
       "types": ["./src/types"],
     },
   },
@@ -2207,6 +2216,402 @@ export * from "./Camera";
 
 ==================================================
 📂 TYP: KÄLLKOD
+📄 FIL: src\game\house\House.ts
+==================================================
+
+import Phaser from "phaser";
+
+export interface HouseBounds {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+}
+
+export class House {
+    public id: string;
+    public bounds: HouseBounds;
+    public doorGridPos: { x: number; y: number };
+    public isPlayerInside: boolean = false;
+
+    constructor(id: string, bounds: HouseBounds, doorGridPos: { x: number; y: number }) {
+        this.id = id;
+        this.bounds = bounds;
+        this.doorGridPos = doorGridPos;
+    }
+
+    public containsPoint(gridX: number, gridY: number): boolean {
+        return gridX > this.bounds.minX && gridX < this.bounds.maxX && gridY > this.bounds.minY && gridY < this.bounds.maxY;
+    }
+}
+
+
+==================================================
+📂 TYP: KÄLLKOD
+📄 FIL: src\game\house\HouseBlueprint.ts
+==================================================
+
+import { BlockType } from "types";
+
+// Exempel på en ritning (6 block bred, 5 block hög)
+export const HOUSE_BLUEPRINT = [
+    [1, 1, 1, 1, 1, 1], // Tak
+    [1, 0, 0, 0, 0, 1], // Väggar & tom insida
+    [1, 0, 0, 0, 0, 1], // Väggar & tom insida
+    [1, 0, 0, 0, 0, 1], // Ingång/Väggar
+    [1, 1, 1, 1, 1, 1], // Golv
+];
+
+export const BLUEPRINT_WIDTH = HOUSE_BLUEPRINT[0].length;
+export const BLUEPRINT_HEIGHT = HOUSE_BLUEPRINT.length;
+
+
+==================================================
+📂 TYP: KÄLLKOD
+📄 FIL: src\game\house\HouseManager.ts
+==================================================
+
+import Phaser from "phaser";
+import type { Planet } from "../planet/Planet";
+import type { Player } from "../player/Player";
+import { House, type HouseBounds } from "./House";
+import { PlacedBlueprint } from "./PlacedBlueprint";
+import { BlockType } from "../../types";
+import { HOUSE_BLUEPRINT, BLUEPRINT_WIDTH, BLUEPRINT_HEIGHT } from "./HouseBlueprint";
+
+export class HouseManager {
+    private scene: Phaser.Scene;
+    private planet: Planet;
+    private player: Player;
+
+    public houses: Map<string, House> = new Map();
+    public placedBlueprints: PlacedBlueprint[] = [];
+
+    public isPlacingBlueprint: boolean = false; // Om spelaren har ritningsverktyget aktivt
+
+    private enterKey?: Phaser.Input.Keyboard.Key;
+    private toggleBlueprintKey?: Phaser.Input.Keyboard.Key;
+    private promptText: Phaser.GameObjects.Text;
+    private guideGraphics: Phaser.GameObjects.Graphics;
+
+    constructor(scene: Phaser.Scene, planet: Planet, player: Player) {
+        this.scene = scene;
+        this.planet = planet;
+        this.player = player;
+
+        if (scene.input.keyboard) {
+            this.enterKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+            // Tryck på 'B' för att slå på/av ritningsplacering
+            this.toggleBlueprintKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);
+        }
+
+        this.promptText = scene.add.text(0, 0, "[E] Gå in i huset", {
+            fontFamily: "monospace",
+            fontSize: "12px",
+            color: "#ffffff",
+            backgroundColor: "#000000aa",
+            padding: { x: 6, y: 3 },
+        });
+        this.promptText.setDepth(100);
+        this.promptText.setVisible(false);
+
+        this.guideGraphics = scene.add.graphics();
+        this.guideGraphics.setDepth(15);
+
+        this.setupInput();
+    }
+
+    private setupInput(): void {
+        // Klicka med vänstermus för att fästa/placera ut ritningen i världen
+        this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+            if (!this.isPlacingBlueprint || !pointer.leftButtonDown()) return;
+
+            const targetGrid = this.getHoverGridPosition();
+            if (targetGrid) {
+                this.placeBlueprintInWorld(targetGrid.x, targetGrid.y);
+            }
+        });
+    }
+
+    public update(): void {
+        if (this.toggleBlueprintKey && Phaser.Input.Keyboard.JustDown(this.toggleBlueprintKey)) {
+            this.isPlacingBlueprint = !this.isPlacingBlueprint;
+            console.log("Ritningsläge:", this.isPlacingBlueprint ? "AKTIVT" : "INAKTIVT");
+        }
+
+        this.checkHousesForPlayer();
+        this.renderGraphics();
+    }
+
+    /**
+     * Sätter ner en ritning permanent i spelvärlden
+     */
+    public placeBlueprintInWorld(startGridX: number, startGridY: number): void {
+        const id = startGridX + "," + startGridY + "_" + Date.now();
+        const bp = new PlacedBlueprint(id, startGridX, startGridY, HOUSE_BLUEPRINT);
+
+        this.placedBlueprints.push(bp);
+        this.isPlacingBlueprint = false; // Stäng av placeringsläget efter klick
+
+        // Stäm av om några block redan finns placerade där
+        this.checkBlueprintProgress(bp);
+    }
+
+    /**
+     * Anropas varje gång ett block placeras eller bryts ner på planeten
+     */
+    public checkForHouseAt(gridX: number, gridY: number): void {
+        for (let i = this.placedBlueprints.length - 1; i >= 0; i--) {
+            const bp = this.placedBlueprints[i];
+
+            // Om blocket är inom ritningens område
+            if (gridX >= bp.startGridX && gridX < bp.startGridX + bp.width && gridY >= bp.startGridY && gridY < bp.startGridY + bp.height) {
+                this.checkBlueprintProgress(bp);
+
+                // Om ritningen nu är helt färdigbyggd!
+                if (bp.isComplete()) {
+                    this.convertBlueprintToHouse(bp);
+                    this.placedBlueprints.splice(i, 1); // Ta bort ritningen ur listan
+                }
+            }
+        }
+    }
+
+    private checkBlueprintProgress(bp: PlacedBlueprint): void {
+        bp.cells.forEach((cell) => {
+            const worldGridX = bp.startGridX + cell.relX;
+            const worldGridY = bp.startGridY + cell.relY;
+            const key = worldGridX + "," + worldGridY;
+            const block = this.planet.blocks.get(key);
+
+            if (cell.required === 1) {
+                cell.isFulfilled = Boolean(block && block.type !== BlockType.AIR);
+            } else if (cell.required === 0) {
+                cell.isFulfilled = !block || block.type === BlockType.AIR;
+            }
+        });
+    }
+
+    private convertBlueprintToHouse(bp: PlacedBlueprint): void {
+        const bounds: HouseBounds = {
+            minX: bp.startGridX,
+            maxX: bp.startGridX + bp.width - 1,
+            minY: bp.startGridY,
+            maxY: bp.startGridY + bp.height - 1,
+        };
+
+        // Sätt dörren i understa raden i mitten av huset
+        const doorPos = {
+            x: bp.startGridX + Math.floor(bp.width / 2),
+            y: bp.startGridY + bp.height - 1,
+        };
+
+        const newHouse = new House(bp.id, bounds, doorPos);
+        this.houses.set(bp.id, newHouse);
+
+        bp.cells.forEach((cell) => {
+            if (cell.required === 1) {
+                const worldGridX = bp.startGridX + cell.relX;
+                const worldGridY = bp.startGridY + cell.relY;
+                const key = worldGridX + "," + worldGridY;
+                const block = this.planet.blocks.get(key);
+
+                if (block) {
+                    (block as any).isIndestructible = true;
+
+                    if (block.body) {
+                        block.body.setDepth(1);
+                        if (block.body.body) {
+                            this.scene.matter.world.remove(block.body.body);
+                            block.body.body = null as any;
+                        }
+                    }
+                }
+            }
+        });
+
+        this.planet.drawOutline();
+    }
+
+    private getHoverGridPosition(): { x: number; y: number } | null {
+        if (!this.player?.sprite) return null;
+
+        const blockSize = this.planet.config.blockSize;
+        const playerGridX = Math.floor(this.player.sprite.x / blockSize);
+        const playerGridY = Math.floor(this.player.sprite.y / blockSize);
+
+        // Placera ritningen lite framför spelaren
+        return {
+            x: playerGridX + 2,
+            y: playerGridY - BLUEPRINT_HEIGHT + 2,
+        };
+    }
+
+    private renderGraphics(): void {
+        this.guideGraphics.clear();
+
+        const blockSize = this.planet.config.blockSize;
+
+        // 1. Rita ut alla existerande placerade ritningar i världen (Gula/Gröna rutor)
+        this.placedBlueprints.forEach((bp) => {
+            bp.cells.forEach((cell) => {
+                const worldX = (bp.startGridX + cell.relX) * blockSize;
+                const worldY = (bp.startGridY + cell.relY) * blockSize;
+
+                if (cell.required === 1) {
+                    if (cell.isFulfilled) {
+                        // Färdigbyggd del (Grön ram)
+                        this.guideGraphics.lineStyle(2, 0x00ff00, 0.6);
+                        this.guideGraphics.strokeRect(worldX, worldY, blockSize, blockSize);
+                    } else {
+                        // Saknar block (Gul/Orange streckad förhandsvisning)
+                        this.guideGraphics.lineStyle(2, 0xffaa00, 0.8);
+                        this.guideGraphics.fillStyle(0xffaa00, 0.15);
+                        this.guideGraphics.strokeRect(worldX, worldY, blockSize, blockSize);
+                        this.guideGraphics.fillRect(worldX, worldY, blockSize, blockSize);
+                    }
+                }
+            });
+        });
+
+        // 2. Om spelaren hålls på att placera en ny ritning (Förhandsgranskning / Ghost)
+        if (this.isPlacingBlueprint) {
+            const hoverPos = this.getHoverGridPosition();
+            if (hoverPos) {
+                for (let r = 0; r < BLUEPRINT_HEIGHT; r++) {
+                    for (let c = 0; c < BLUEPRINT_WIDTH; c++) {
+                        const cellType = HOUSE_BLUEPRINT[r][c];
+                        const worldX = (hoverPos.x + c) * blockSize;
+                        const worldY = (hoverPos.y + r) * blockSize;
+
+                        if (cellType === 1) {
+                            // Blå svävande ritningskontur
+                            this.guideGraphics.lineStyle(2, 0x00ffff, 0.9);
+                            this.guideGraphics.fillStyle(0x00ffff, 0.3);
+                            this.guideGraphics.strokeRect(worldX, worldY, blockSize, blockSize);
+                            this.guideGraphics.fillRect(worldX, worldY, blockSize, blockSize);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private checkHousesForPlayer(): void {
+        if (!this.player?.sprite) return;
+
+        const blockSize = this.planet.config.blockSize;
+        const playerGridX = Math.floor(this.player.sprite.x / blockSize);
+        const playerGridY = Math.floor(this.player.sprite.y / blockSize);
+
+        let nearHouseDoor: House | null = null;
+
+        for (const house of this.houses.values()) {
+            // Beräkna avståndet till dörren
+            const distToDoor = Math.hypot(playerGridX - house.doorGridPos.x, playerGridY - house.doorGridPos.y);
+
+            // Öka radien till 2.5 block så dörren aktiveras både direkt utanför och direkt innanför
+            if (distToDoor <= 2.5) {
+                nearHouseDoor = house;
+                break;
+            }
+        }
+
+        if (nearHouseDoor) {
+            const doorWorldX = nearHouseDoor.doorGridPos.x * blockSize + blockSize / 2;
+            const doorWorldY = nearHouseDoor.doorGridPos.y * blockSize;
+
+            this.promptText.setPosition(doorWorldX - 40, doorWorldY - 20);
+            this.promptText.setText(nearHouseDoor.isPlayerInside ? "[E] Gå ut" : "[E] Gå in i huset");
+            this.promptText.setVisible(true);
+
+            if (this.enterKey && Phaser.Input.Keyboard.JustDown(this.enterKey)) {
+                this.togglePlayerInsideHouse(nearHouseDoor);
+            }
+        } else {
+            this.promptText.setVisible(false);
+        }
+    }
+
+    private togglePlayerInsideHouse(house: House): void {
+        house.isPlayerInside = !house.isPlayerInside;
+
+        // Tona ner/upp alla husets block beroende på om spelaren är inuti eller utanför
+        for (let x = house.bounds.minX; x <= house.bounds.maxX; x++) {
+            for (let y = house.bounds.minY; y <= house.bounds.maxY; y++) {
+                const key = x + "," + y;
+                const block = this.planet.blocks.get(key);
+
+                if (block && block.body) {
+                    // Gör husväggarna halvtransparenta (0.4 alpha) när spelaren är inuti
+                    block.body.setAlpha(house.isPlayerInside ? 0.4 : 1.0);
+                }
+            }
+        }
+
+        console.log(house.isPlayerInside ? "Spelaren gick IN i huset" : "Spelaren gick UT ur huset");
+    }
+}
+
+
+==================================================
+📂 TYP: KÄLLKOD
+📄 FIL: src\game\house\index.ts
+==================================================
+
+export * from "./House";
+export * from "./HouseManager";
+export * from "./HouseBlueprint";
+export * from "./PlacedBlueprint";
+
+
+==================================================
+📂 TYP: KÄLLKOD
+📄 FIL: src\game\house\PlacedBlueprint.ts
+==================================================
+
+export interface BlueprintCell {
+    relX: number;
+    relY: number;
+    required: number; // 1 = Kräver block, 0 = Kräver tomrum
+    isFulfilled: boolean;
+}
+
+export class PlacedBlueprint {
+    public id: string;
+    public startGridX: number;
+    public startGridY: number;
+    public width: number;
+    public height: number;
+    public cells: BlueprintCell[] = [];
+
+    constructor(id: string, startGridX: number, startGridY: number, blueprintMatrix: number[][]) {
+        this.id = id;
+        this.startGridX = startGridX;
+        this.startGridY = startGridY;
+        this.height = blueprintMatrix.length;
+        this.width = blueprintMatrix[0].length;
+
+        for (let r = 0; r < this.height; r++) {
+            for (let c = 0; c < this.width; c++) {
+                this.cells.push({
+                    relX: c,
+                    relY: r,
+                    required: blueprintMatrix[r][c],
+                    isFulfilled: false,
+                });
+            }
+        }
+    }
+
+    public isComplete(): boolean {
+        return this.cells.every((cell) => cell.required === 0 || cell.isFulfilled);
+    }
+}
+
+
+==================================================
+📂 TYP: KÄLLKOD
 📄 FIL: src\game\managers\BuildingManager.ts
 ==================================================
 
@@ -2214,15 +2619,17 @@ import Phaser from "phaser";
 import { Planet } from "planet";
 import { BlockType } from "types";
 import type { Player } from "player";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 import type { MobileInputState } from "ui";
 import type { HighlightManager } from "managers";
+import type { HouseManager } from "../house/HouseManager";
 
 export class BuildingManager {
     private scene: Phaser.Scene;
     private planet: Planet;
     private player: Player;
     private highlightManager: HighlightManager;
+    private houseManager: HouseManager;
     private maxBuildDistance: number = 48;
     private debugGraphics!: Phaser.GameObjects.Graphics;
 
@@ -2230,11 +2637,12 @@ export class BuildingManager {
     private canBuild: boolean = true;
     private readonly buildCooldownMs: number = 200;
 
-    constructor(scene: Phaser.Scene, planet: Planet, player: Player, highlightManager: HighlightManager) {
+    constructor(scene: Phaser.Scene, planet: Planet, player: Player, highlightManager: HighlightManager, houseManager: HouseManager) {
         this.scene = scene;
         this.planet = planet;
         this.player = player;
         this.highlightManager = highlightManager;
+        this.houseManager = houseManager;
 
         this.scene.game.canvas.oncontextmenu = (e) => e.preventDefault();
 
@@ -2278,6 +2686,7 @@ export class BuildingManager {
 
         if (success) {
             useGameStore.getState().removeResource(selectedResource, 1);
+            this.houseManager?.checkForHouseAt(target.gridX, target.gridY);
 
             this.canBuild = false;
             this.scene.time.delayedCall(this.buildCooldownMs, () => {
@@ -2320,6 +2729,12 @@ export class BuildingManager {
 
             if (success) {
                 useGameStore.getState().removeResource(selectedResource, 1);
+                this.houseManager?.checkForHouseAt(gridX, gridY);
+
+                this.canBuild = false;
+                this.scene.time.delayedCall(this.buildCooldownMs, () => {
+                    this.canBuild = true;
+                });
             }
         });
     }
@@ -2339,9 +2754,11 @@ export class BuildingManager {
         if (resource === "iron_ore") return BlockType.IRON_ORE;
         if (resource === "copper_ore") return BlockType.COPPER_ORE;
         if (resource === "silver_ore") return BlockType.SILVER_ORE;
-
         if (resource === "gold_ore") return BlockType.GOLD_ORE;
         if (resource === "diamond") return BlockType.DIAMOND;
+        if (resource === "chest") return BlockType.CHEST;
+        if (resource === "bed") return BlockType.BED;
+        if (resource === "torch") return BlockType.TORCH;
         return null;
     }
 
@@ -2370,13 +2787,96 @@ export class BuildingManager {
 
 ==================================================
 📂 TYP: KÄLLKOD
+📄 FIL: src\game\managers\CombatManager.ts
+==================================================
+
+import Phaser from "phaser";
+import { useGameStore } from "store";
+import type { Player } from "player";
+
+export class CombatManager {
+    private scene: Phaser.Scene;
+    private player: Player;
+    private canAttack: boolean = true;
+    private readonly defaultCooldownMs: number = 200;
+
+    constructor(scene: Phaser.Scene, player: Player) {
+        this.scene = scene;
+        this.player = player;
+    }
+
+    public attack(): void {
+        const currentTool = useGameStore.getState().currentTool;
+        if (!currentTool || currentTool.type !== "sword" || !this.canAttack) return;
+
+        // 1. Spela upp den visuella animationen
+        this.player.swingWeapon();
+
+        // 2. Beräkna hitbox baserat på spelarens riktning
+        this.checkHitbox(currentTool.damage);
+
+        // 3. Hantera cooldown baserat på vapnets speed
+        this.canAttack = false;
+        const cooldown = currentTool.speed ?? this.defaultCooldownMs;
+        this.scene.time.delayedCall(cooldown, () => {
+            this.canAttack = true;
+        });
+    }
+
+    private checkHitbox(damage: number): void {
+        if (!this.player.sprite) return;
+
+        const blockSize = 16;
+        const direction = this.player.getDirection();
+        const rotation = this.player.sprite.rotation;
+
+        // Upp- och högervektorer baserat på rotation
+        const upX = Math.cos(rotation - Math.PI / 2);
+        const upY = Math.sin(rotation - Math.PI / 2);
+        const rightX = -upY;
+        const rightY = upX;
+
+        let attackX = this.player.sprite.x;
+        let attackY = this.player.sprite.y;
+
+        // Placera hitboxen framför spelaren utifrån riktning
+        if (direction.includes("right")) {
+            attackX += rightX * blockSize;
+            attackY += rightY * blockSize;
+        } else if (direction.includes("left")) {
+            attackX -= rightX * blockSize;
+            attackY -= rightY * blockSize;
+        }
+
+        // Sök efter fiender inom attackområdet (Matter.js query)
+        const attackRadius = 24;
+        const bodies = this.scene.matter.world.getAllBodies();
+
+        // Filtrera fram fiender (antag att fiender har data-egenskapen 'isEnemy')
+        const hitBodies = this.scene.matter.query.point(bodies, { x: attackX, y: attackY });
+
+        hitBodies.forEach((body) => {
+            const gameObject = body.gameObject as Phaser.Physics.Matter.Sprite;
+            if (gameObject && gameObject.getData("isEnemy")) {
+                const enemy = gameObject.getData("enemyInstance");
+                if (enemy && typeof enemy.takeDamage === "function") {
+                    enemy.takeDamage(damage);
+                }
+            }
+        });
+    }
+}
+
+
+==================================================
+📂 TYP: KÄLLKOD
 📄 FIL: src\game\managers\HighlightManager.ts
 ==================================================
 
 import Phaser from "phaser";
 import type { Planet } from "planet";
 import type { Player } from "player";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 
 export class HighlightManager {
     private scene: Phaser.Scene;
@@ -2509,6 +3009,7 @@ export class HighlightManager {
 export * from "./MiningManager";
 export * from "./HighlightManager";
 export * from "./BuildingManager";
+export * from "./CombatManager";
 
 
 ==================================================
@@ -2520,7 +3021,7 @@ import Phaser from "phaser";
 import type { Planet } from "planet";
 import { BlockType, REQUIRED_TOOL_TYPE, REQUIRED_TOOL_POWER } from "types";
 import type { Player } from "player";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 import type { MobileInputState } from "ui";
 import type { HighlightManager } from "managers";
 
@@ -2617,6 +3118,18 @@ export class MiningManager {
         const key = x + "," + y;
         const block = this.planet.blocks.get(key);
         if (!block) return;
+
+        // 1. Kontrollera om blocket tillhör ett färdigt hus och är oförstörbart
+        if ((block as any).isIndestructible) {
+            // Blinka rött för att visa spelaren att blocket inte går att förstöra
+            block.body.setTint(0xff0000);
+            this.scene.time.delayedCall(150, () => {
+                if (block.body?.active) {
+                    block.body.setTint(0xcccccc); // Återställ till husets nyans
+                }
+            });
+            return; // Avbryt brytningen!
+        }
 
         const currentTool = useGameStore.getState().currentTool;
         if (!currentTool) return;
@@ -2721,7 +3234,7 @@ import { SimplexNoise } from "./planetHelpers";
 import { DEFAULT_PLANET_CONFIG, type PlanetConfig } from "./planetConfig";
 import { PlanetOutline, CATEGORY_TERRAIN, CATEGORY_LOOT } from "./planetOutline";
 import { PLANET_BIOMES, type PlanetType, type PlanetBiomeConfig } from "./planetConfig";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 import type { ResourceType } from "types";
 
 export interface ExtendedPlanetConfig extends PlanetConfig {
@@ -2767,6 +3280,11 @@ export class Planet {
     this.createBlockTexture("wood_tile", 0x5c4033);
     this.createBlockTexture("leaves_tile", 0x228b22);
     this.createBlockTexture("sand_tile", colors.sand_tile || 0xe0c068);
+
+    // Nya texturer
+    this.createBlockTexture("chest_tile", 0x8b4513);
+    this.createBlockTexture("bed_tile", 0xff0000);
+    this.createBlockTexture("torch_tile", 0xffcc00);
   }
 
   private createBlockTexture(key: string, color: number): void {
@@ -3015,21 +3533,6 @@ export class Planet {
       return this.config.blockHp[type];
     }
     return 1;
-  }
-
-  private getTextureKey(blockType: BlockType): string {
-    if (blockType === BlockType.CORE) return "core_tile";
-    if (blockType === BlockType.STONE) return "stone_tile";
-    if (blockType === BlockType.IRON_ORE) return "iron_ore_tile";
-    if (blockType === BlockType.COPPER_ORE) return "copper_ore_tile";
-    if (blockType === BlockType.SILVER_ORE) return "silver_ore_tile";
-    if (blockType === BlockType.GOLD_ORE) return "gold_ore_tile";
-    if (blockType === BlockType.DIAMOND) return "diamond_tile";
-    if (blockType === BlockType.COAL) return "coal_tile";
-    if (blockType === BlockType.WOOD) return "wood_tile";
-    if (blockType === BlockType.LEAVES) return "leaves_tile";
-    if (blockType === BlockType.SAND) return "sand_tile";
-    return "dirt_tile";
   }
 
   public isFullyMined(): boolean {
@@ -3287,20 +3790,6 @@ export class Planet {
     this.scene.events.on("update", updateListener);
   }
 
-  private mapBlockToResource(type: BlockType): ResourceType | null {
-    if (type === BlockType.DIRT) return "dirt";
-    if (type === BlockType.STONE) return "stone";
-    if (type === BlockType.COAL) return "coal";
-    if (type === BlockType.IRON_ORE) return "iron_ore";
-    if (type === BlockType.COPPER_ORE) return "copper_ore";
-    if (type === BlockType.SILVER_ORE) return "silver_ore";
-    if (type === BlockType.GOLD_ORE) return "gold_ore";
-    if (type === BlockType.DIAMOND) return "diamond";
-    if (type === BlockType.WOOD) return "wood";
-    if (type === BlockType.SAND) return "sand";
-    return null;
-  }
-
   public placeBlock(x: number, y: number, blockType: BlockType): boolean {
     const key = x + "," + y;
     if (this.blocks.has(key)) return false;
@@ -3337,6 +3826,41 @@ export class Planet {
     this.drawOutline();
 
     return true;
+  }
+
+  private getTextureKey(blockType: BlockType): string {
+    if (blockType === BlockType.CORE) return "core_tile";
+    if (blockType === BlockType.STONE) return "stone_tile";
+    if (blockType === BlockType.IRON_ORE) return "iron_ore_tile";
+    if (blockType === BlockType.COPPER_ORE) return "copper_ore_tile";
+    if (blockType === BlockType.SILVER_ORE) return "silver_ore_tile";
+    if (blockType === BlockType.GOLD_ORE) return "gold_ore_tile";
+    if (blockType === BlockType.DIAMOND) return "diamond_tile";
+    if (blockType === BlockType.COAL) return "coal_tile";
+    if (blockType === BlockType.WOOD) return "wood_tile";
+    if (blockType === BlockType.LEAVES) return "leaves_tile";
+    if (blockType === BlockType.SAND) return "sand_tile";
+    if (blockType === BlockType.CHEST) return "chest_tile";
+    if (blockType === BlockType.BED) return "bed_tile";
+    if (blockType === BlockType.TORCH) return "torch_tile";
+    return "dirt_tile";
+  }
+
+  private mapBlockToResource(type: BlockType): ResourceType | null {
+    if (type === BlockType.DIRT) return "dirt";
+    if (type === BlockType.STONE) return "stone";
+    if (type === BlockType.COAL) return "coal";
+    if (type === BlockType.IRON_ORE) return "iron_ore";
+    if (type === BlockType.COPPER_ORE) return "copper_ore";
+    if (type === BlockType.SILVER_ORE) return "silver_ore";
+    if (type === BlockType.GOLD_ORE) return "gold_ore";
+    if (type === BlockType.DIAMOND) return "diamond";
+    if (type === BlockType.WOOD) return "wood";
+    if (type === BlockType.SAND) return "sand";
+    if (type === BlockType.CHEST) return "chest";
+    if (type === BlockType.BED) return "bed";
+    if (type === BlockType.TORCH) return "torch";
+    return null;
   }
 }
 
@@ -3460,6 +3984,9 @@ export const DEFAULT_PLANET_CONFIG: PlanetConfig = {
         [BlockType.DIAMOND]: 15,
         [BlockType.WOOD]: 2,
         [BlockType.DIRT]: 1,
+        [BlockType.CHEST]: 2,
+        [BlockType.BED]: 1,
+        [BlockType.TORCH]: 1,
         [BlockType.AIR]: 0,
     },
 };
@@ -3759,7 +4286,7 @@ import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture, c
 import { CATEGORY_PLAYER, CATEGORY_TERRAIN } from "planet";
 import type { MobileInputState } from "ui";
 import { BlockType } from "types";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 
 type Directions = {
     tangentX: number;
@@ -3796,6 +4323,8 @@ export class Player {
     private eyesGraphics!: Phaser.GameObjects.Graphics;
     private armorGraphics!: Phaser.GameObjects.Graphics; // Grafik för utrustning (hjälm, kläder, skor)
     private direction: PlayerDirection = "right";
+
+    private weaponGraphics!: Phaser.GameObjects.Graphics;
 
     // Stabil vinkel för gravitation och rotation
     private currentSnapAngle: number = 0;
@@ -3861,6 +4390,33 @@ export class Player {
         this.createDebug();
     }
 
+    public spawn(): void {
+        if (!this.scene.textures.exists("player_tile")) {
+            createPlayerTexture(this.scene, "player_tile", this.settings.bodyColor);
+        }
+
+        this.bodySprite = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_tile");
+        this.bodySprite.setDisplaySize(this.settings.width, this.settings.height);
+        this.bodySprite.setDepth(10);
+
+        if (!this.scene.textures.exists("player_hat")) {
+            createPlayerHatTexture(this.scene, "player_hat", this.settings.hatColor);
+            this.hat = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_hat");
+            this.hat.setScale(this.settings.hatScale);
+            this.hat.setOrigin(0.5, 1);
+            this.hat?.setDepth(12);
+        }
+
+        this.armorGraphics = this.scene.add.graphics();
+        this.armorGraphics?.setDepth(11);
+
+        this.eyesGraphics = this.scene.add.graphics();
+        this.eyesGraphics?.setDepth(13);
+
+        this.weaponGraphics = this.scene.add.graphics();
+        this.weaponGraphics.setDepth(14);
+    }
+
     private findSpawnPosition(): { x: number; y: number } {
         const radius = this.planet.config.radius;
         const mapSize = radius * 2;
@@ -3913,27 +4469,6 @@ export class Player {
         return { x: worldX, y: worldY };
     }
 
-    public spawn(): void {
-        if (!this.scene.textures.exists("player_tile")) {
-            createPlayerTexture(this.scene, "player_tile", this.settings.bodyColor);
-        }
-
-        this.bodySprite = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_tile");
-        this.bodySprite.setDisplaySize(this.settings.width, this.settings.height);
-
-        if (!this.scene.textures.exists("player_hat")) {
-            createPlayerHatTexture(this.scene, "player_hat", this.settings.hatColor);
-            this.hat = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_hat");
-            this.hat.setScale(this.settings.hatScale);
-            this.hat.setOrigin(0.5, 1);
-        }
-
-        this.eyesGraphics = this.scene.add.graphics();
-
-        this.armorGraphics = this.scene.add.graphics();
-        this.armorGraphics.setDepth(11);
-    }
-
     public getDirection(): PlayerDirection {
         return this.direction;
     }
@@ -3947,6 +4482,7 @@ export class Player {
         this.eyesGraphics?.setVisible(!boarded);
         this.armorGraphics?.setVisible(!boarded);
         this.sprite.setSensor(boarded);
+
         if (position) {
             this.sprite.setPosition(position.x, position.y);
             const body = this.sprite.body as MatterJS.BodyType;
@@ -4305,32 +4841,6 @@ export class Player {
         this.hat.setFlipX(this.direction.includes("left"));
     }
 
-    private drawEyes(): void {
-        if (!this.eyesGraphics || !this.sprite) return;
-
-        this.eyesGraphics.clear();
-        this.eyesGraphics.setPosition(this.sprite.x, this.sprite.y - 2);
-        this.eyesGraphics.setRotation(this.sprite.rotation);
-
-        this.eyesGraphics.setScale(this.settings.eyeScale);
-
-        let pupilOffsetX = 0;
-        let pupilOffsetY = 0;
-
-        if (this.direction.includes("right")) pupilOffsetX = 4;
-        if (this.direction.includes("left")) pupilOffsetX = -4;
-        if (this.direction.includes("up")) pupilOffsetY = -4;
-        if (this.direction.includes("down")) pupilOffsetY = 4;
-
-        this.eyesGraphics.fillStyle(0xffffff, 1);
-        this.eyesGraphics.fillRect(-16, -16, 12, 16);
-        this.eyesGraphics.fillRect(4, -16, 12, 16);
-
-        this.eyesGraphics.fillStyle(0x000000, 1);
-        this.eyesGraphics.fillRect(-12 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
-        this.eyesGraphics.fillRect(8 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
-    }
-
     private drawEquipment(): void {
         if (!this.armorGraphics || !this.sprite) return;
 
@@ -4358,6 +4868,60 @@ export class Player {
             this.armorGraphics.fillStyle(equipment.helmet.color, 1);
             this.armorGraphics.fillRect(-7, -10, 14, 5);
         }
+    }
+
+    private drawEyes(): void {
+        if (!this.eyesGraphics || !this.sprite) return;
+
+        this.eyesGraphics.clear();
+        this.eyesGraphics.setPosition(this.sprite.x, this.sprite.y - 2);
+        this.eyesGraphics.setRotation(this.sprite.rotation);
+
+        this.eyesGraphics.setScale(this.settings.eyeScale);
+
+        let pupilOffsetX = 0;
+        let pupilOffsetY = 0;
+
+        if (this.direction.includes("right")) pupilOffsetX = 4;
+        if (this.direction.includes("left")) pupilOffsetX = -4;
+        if (this.direction.includes("up")) pupilOffsetY = -4;
+        if (this.direction.includes("down")) pupilOffsetY = 4;
+
+        this.eyesGraphics.fillStyle(0xffffff, 1);
+        this.eyesGraphics.fillRect(-16, -16, 12, 16);
+        this.eyesGraphics.fillRect(4, -16, 12, 16);
+
+        this.eyesGraphics.fillStyle(0x000000, 1);
+        this.eyesGraphics.fillRect(-12 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
+        this.eyesGraphics.fillRect(8 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
+    }
+
+    public swingWeapon(): void {
+        if (!this.weaponGraphics || !this.sprite) return;
+
+        const currentTool = useGameStore.getState().currentTool;
+        if (currentTool?.type !== "sword") return;
+
+        this.weaponGraphics.clear();
+        this.weaponGraphics.setPosition(this.sprite.x, this.sprite.y);
+        this.weaponGraphics.setRotation(this.sprite.rotation);
+
+        // Rita en bågformad attackbåge (svepning)
+        this.weaponGraphics.lineStyle(3, 0xffffff, 0.9);
+        this.weaponGraphics.beginPath();
+        this.weaponGraphics.arc(0, 0, 20, -Math.PI / 4, Math.PI / 4, false);
+        this.weaponGraphics.strokePath();
+
+        // Tona ut svärdsvepningen snabbt
+        this.scene.tweens.add({
+            targets: this.weaponGraphics,
+            alpha: { from: 1, to: 0 },
+            duration: 150,
+            onComplete: () => {
+                this.weaponGraphics.clear();
+                this.weaponGraphics.setAlpha(1);
+            },
+        });
     }
 
     private createDebug() {
@@ -5342,11 +5906,13 @@ import { Planet, DEFAULT_PLANET_CONFIG } from "planet";
 import { Player } from "player";
 import { Rocket } from "../game/rocket";
 import { CameraController } from "camera";
-import { MiningManager, HighlightManager, BuildingManager } from "managers";
+import { MiningManager, HighlightManager, BuildingManager, CombatManager } from "managers";
 //import { VirtualJoystick } from "phaser-virtual-joystick";
 import { Starfield } from "../game/background/Starfield";
+import { HouseManager } from "house";
 
 import { Header, MobileControls, VirtualJoystick } from "ui";
+import { useGameStore } from "store";
 
 export class MainScene extends Phaser.Scene {
   private planet!: Planet;
@@ -5354,9 +5920,11 @@ export class MainScene extends Phaser.Scene {
   private rocket!: Rocket;
   private starfield!: Starfield;
   private cameraController!: CameraController;
+  private combatManager!: CombatManager;
   private highlightManager!: HighlightManager;
   private miningManager!: MiningManager;
   private buildingManager!: BuildingManager;
+  public houseManager!: HouseManager;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
   mobileControls!: MobileControls;
@@ -5396,9 +5964,13 @@ export class MainScene extends Phaser.Scene {
     this.rocket.setPlayerAndCamera(this.player, this.cameraController);
 
     // Initiera Highlight Manager först och skicka med den till Mining och Building
+
+    this.houseManager = new HouseManager(this, this.planet, this.player);
+    this.combatManager = new CombatManager(this, this.player);
+
     this.highlightManager = new HighlightManager(this, this.planet, this.player);
     this.miningManager = new MiningManager(this, this.planet, this.player, this.highlightManager);
-    this.buildingManager = new BuildingManager(this, this.planet, this.player, this.highlightManager);
+    this.buildingManager = new BuildingManager(this, this.planet, this.player, this.highlightManager, this.houseManager);
 
     // Keyboard input
     if (this.input.keyboard) {
@@ -5438,8 +6010,18 @@ export class MainScene extends Phaser.Scene {
 
     // Uppdatera markören samt båda managers med mobiltillståndet
     this.highlightManager.update();
-    this.miningManager.update(this.mobileControls.state);
+
+    if (this.mobileControls?.state.primaryAction) {
+      const currentTool = useGameStore.getState().currentTool;
+      if (currentTool?.type === "sword") {
+        this.combatManager.attack();
+      } else {
+        this.miningManager.mineInFront();
+      }
+    }
+
     this.buildingManager.update(this.mobileControls.state);
+    this.houseManager.update();
   }
 
   private createDebug() {
@@ -5558,13 +6140,18 @@ export const ALL_TOOLS: Record<ToolType, Tool> = {
     "Wood Shovel": { name: "Wood Shovel", power: 0.1, damage: 0.1, price: 0, type: "shovel", speed: 200 },
     "Iron Shovel": { name: "Iron Shovel", power: 1, damage: 1, price: 10, type: "shovel", speed: 150 },
     "Diamond Shovel": { name: "Diamond Shovel", power: 10, damage: 10, price: 100, type: "shovel", speed: 50 },
+
+    // Swords
+    "Wood Sword": { name: "Wood Sword", power: 0.1, damage: 0.1, price: 0, type: "sword", speed: 200 },
+    "Iron Sword": { name: "Iron Sword", power: 1, damage: 1, price: 10, type: "sword", speed: 150 },
+    "Diamond Sword": { name: "Diamond Sword", power: 10, damage: 10, price: 100, type: "sword", speed: 50 },
 };
 
 // Register över alla rustningsföremål
 export const ALL_ARMOR: Record<string, ArmorItem> = {
     "Iron Helmet": { name: "Iron Helmet", slot: "helmet", armor: 5, color: 0xc0c0c0 },
-    "Leather Clothes": { name: "Leather Clothes", slot: "chest", armor: 3, color: 0x8b5a2b },
-    "Iron Clothes": { name: "Iron Clothes", slot: "chest", armor: 8, color: 0xc0c0c0 },
+    "Leather Clothes": { name: "Leather Clothes", slot: "armor", armor: 3, color: 0x8b5a2b },
+    "Iron Clothes": { name: "Iron Clothes", slot: "armor", armor: 8, color: 0xc0c0c0 },
     "Speed Boots": { name: "Speed Boots", slot: "boots", armor: 2, speedBonus: 1.5, color: 0x00ffff },
 };
 
@@ -5598,7 +6185,18 @@ export interface GameState {
     toggleInventory: () => void;
     addResource: (type: any, amount: number) => boolean;
     removeResource: (type: any, amount: number) => void;
+    craftItem: (itemKey: string) => boolean;
 }
+
+
+==================================================
+📂 TYP: KÄLLKOD
+📄 FIL: src\store\index.ts
+==================================================
+
+export * from "./useGameStore";
+export * from "./gameStoreTypes";
+export * from "./gameStoreHelpers";
 
 
 ==================================================
@@ -5627,6 +6225,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     heal: (amount) => set((state) => ({ hp: Math.min(state.maxHp, state.hp + amount) })),
 
     inventory: {
+        "Iron Sword": 1,
         // Startverktyg
         "Wood Pickaxe": 1,
         "Iron Pickaxe": 1,
@@ -5656,11 +6255,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         core: 0,
     },
     maxSlots: MAX_INVENTORY_SLOTS,
-    currentTool: ALL_TOOLS["Wood Pickaxe"],
+    currentTool: ALL_TOOLS["Iron Sword"],
 
     equipment: {
         helmet: null,
-        chest: null,
+        armor: null,
         boots: null,
     },
 
@@ -5724,6 +6323,33 @@ export const useGameStore = create<GameState>((set, get) => ({
                 currentTool: tool,
             };
         }),
+
+    craftItem: (itemKey: string) => {
+        const info = RESOURCE_INFO[itemKey];
+        if (!info || !info.isCraftable || !info.recipe) return false;
+
+        const state = get();
+        const inventory = state.inventory;
+
+        // Kontrollera om spelaren har tillräckligt av alla ingredienser
+        const hasIngredients = Object.entries(info.recipe).every(
+            ([ingredient, neededAmount]) => (inventory[ingredient] || 0) >= neededAmount,
+        );
+
+        if (!hasIngredients || !state.canPickUp()) return false;
+
+        // Dra av ingredienserna från inventory
+        const newInventory = { ...inventory };
+        Object.entries(info.recipe).forEach(([ingredient, neededAmount]) => {
+            newInventory[ingredient] -= neededAmount;
+        });
+
+        // Lägg till den tillverkade enheten (t.ex. 1 ingot eller 1 chest)
+        newInventory[itemKey] = (newInventory[itemKey] || 0) + 1;
+
+        set({ inventory: newInventory });
+        return true;
+    },
 
     setSelectedResource: (resource) => set({ selectedResource: resource }),
 
@@ -5798,9 +6424,9 @@ export type ResourceType =
     | "copper_ore"
     | "copper"
     | "copper_ingot"
-    | "silver_ore" // <--- Lägg till
-    | "silver" // <--- Lägg till
-    | "silver_ingot" // <--- Lägg till
+    | "silver_ore"
+    | "silver"
+    | "silver_ingot"
     | "iron_ore"
     | "iron_ingot"
     | "gold_ore"
@@ -5808,7 +6434,10 @@ export type ResourceType =
     | "diamond"
     | "wood"
     | "sand"
-    | "core";
+    | "core"
+    | "chest"
+    | "bed"
+    | "torch";
 
 // Planet & Block Types
 export const BlockType = {
@@ -5824,6 +6453,9 @@ export const BlockType = {
     WOOD: 8,
     LEAVES: 9,
     SAND: 10,
+    CHEST: 11,
+    BED: 12,
+    TORCH: 13,
     CORE: 99,
 } as const;
 
@@ -5838,18 +6470,21 @@ export type ToolType =
     | "Diamond Axe"
     | "Wood Shovel"
     | "Iron Shovel"
-    | "Diamond Shovel";
+    | "Diamond Shovel"
+    | "Wood Sword"
+    | "Iron Sword"
+    | "Diamond Sword";
 
 export interface Tool {
     name: string;
     power: number;
     damage: number;
     price: number;
-    type: "pickaxe" | "axe" | "shovel";
+    type: "pickaxe" | "axe" | "shovel" | "sword";
     speed?: number; // Hastighetsmultiplikator eller cooldown i ms
 }
 
-export type EquipmentSlot = "helmet" | "chest" | "boots";
+export type EquipmentSlot = "helmet" | "armor" | "boots";
 
 export interface ArmorItem {
     name: string;
@@ -5864,16 +6499,18 @@ export const REQUIRED_TOOL_TYPE: Record<BlockType, "pickaxe" | "axe" | "shovel" 
     [BlockType.AIR]: "none",
     [BlockType.DIRT]: "none",
     [BlockType.LEAVES]: "none",
-    [BlockType.SAND]: "shovel", // Kräver Spade
-    [BlockType.WOOD]: "axe", // Kräver Yxa
-    [BlockType.STONE]: "pickaxe", // Kräver Hacka
+    [BlockType.SAND]: "shovel",
+    [BlockType.WOOD]: "axe",
+    [BlockType.STONE]: "pickaxe",
     [BlockType.COAL]: "pickaxe",
     [BlockType.IRON_ORE]: "pickaxe",
     [BlockType.COPPER_ORE]: "pickaxe",
     [BlockType.SILVER_ORE]: "pickaxe",
-
     [BlockType.GOLD_ORE]: "pickaxe",
     [BlockType.DIAMOND]: "pickaxe",
+    [BlockType.CHEST]: "none",
+    [BlockType.BED]: "none",
+    [BlockType.TORCH]: "none",
     [BlockType.CORE]: "none",
 };
 
@@ -5882,15 +6519,18 @@ export const REQUIRED_TOOL_POWER: Record<BlockType, number> = {
     [BlockType.AIR]: 0,
     [BlockType.DIRT]: 0,
     [BlockType.LEAVES]: 0,
-    [BlockType.SAND]: 0.1, // Kräver minst Wood Spade
-    [BlockType.WOOD]: 0.1, // Kräver minst Wood Axe
-    [BlockType.STONE]: 0.1, // Kräver minst Wood Pickaxe
+    [BlockType.SAND]: 0.1,
+    [BlockType.WOOD]: 0.1,
+    [BlockType.STONE]: 0.1,
     [BlockType.COAL]: 0.1,
     [BlockType.IRON_ORE]: 1,
     [BlockType.COPPER_ORE]: 1,
     [BlockType.SILVER_ORE]: 1,
     [BlockType.GOLD_ORE]: 5,
     [BlockType.DIAMOND]: 10,
+    [BlockType.CHEST]: 0.1,
+    [BlockType.BED]: 0,
+    [BlockType.TORCH]: 0,
     [BlockType.CORE]: 999,
 };
 
@@ -5921,7 +6561,7 @@ import { Hotbar } from "./Hotbar";
 import { InventoryModal } from "./InventoryModal";
 import { HealthBar } from "./HealthBar";
 import { ToolSlot } from "./ToolSlot";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 
 export class Header extends HTMLElement {
     private hotbar!: Hotbar;
@@ -6049,7 +6689,7 @@ if (!customElements.get("header-ui")) {
 📄 FIL: src\ui\HealthBar.ts
 ==================================================
 
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 
 export class HealthBar extends HTMLElement {
     private barFill!: HTMLDivElement;
@@ -6142,7 +6782,7 @@ if (!customElements.get("health-bar-ui")) {
 📄 FIL: src\ui\Hotbar.ts
 ==================================================
 
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 import { RESOURCE_COLORS } from "ui";
 
 export class Hotbar extends HTMLElement {
@@ -6301,7 +6941,7 @@ export * from "./uiHelpers";
 
 // src/ui/InventoryModal.ts
 
-import { useGameStore, ALL_TOOLS, ALL_ARMOR } from "src/store/useGameStore";
+import { useGameStore, ALL_TOOLS, ALL_ARMOR } from "store";
 import type { ToolType, EquipmentSlot } from "types";
 import { RESOURCE_INFO } from "ui";
 import { getToolIcon } from "./uiHelpers";
@@ -6433,7 +7073,7 @@ export class InventoryModal extends HTMLElement {
 
         const slots: { slot: EquipmentSlot; icon: string; name: string }[] = [
             { slot: "helmet", icon: "🪖", name: "Hjälm" },
-            { slot: "chest", icon: "👕", name: "Kläder" },
+            { slot: "armor", icon: "👕", name: "Kläder" },
             { slot: "boots", icon: "🥾", name: "Skor" },
         ];
 
@@ -6643,7 +7283,7 @@ export class InventoryModal extends HTMLElement {
                 name.style.pointerEvents = "none";
 
                 const icon = document.createElement("span");
-                icon.innerText = armorObj?.slot === "helmet" ? "🪖" : armorObj?.slot === "chest" ? "👕" : "🥾";
+                icon.innerText = armorObj?.slot === "helmet" ? "🪖" : armorObj?.slot === "armor" ? "👕" : "🥾";
                 icon.style.fontSize = "14px";
                 icon.style.pointerEvents = "none";
 
@@ -7161,7 +7801,7 @@ if (!customElements.get("controls-ui")) {
 📄 FIL: src\ui\ToolSlot.ts
 ==================================================
 
-import { useGameStore, ALL_TOOLS } from "src/store/useGameStore";
+import { useGameStore, ALL_TOOLS } from "store";
 import type { ToolType } from "types";
 import { renderSlotContent, getToolIcon } from "./uiHelpers";
 
@@ -7267,9 +7907,11 @@ import type { Tool } from "types";
 
 export function getToolIcon(tool?: Tool | null): string {
     if (!tool) return "";
+    if (tool.type === "pickaxe") return "⛏️";
     if (tool.type === "axe") return "🪓";
     if (tool.type === "shovel") return "🧹";
-    return "⛏️";
+    if (tool.type === "sword") return "⚔️️";
+    return "";
 }
 
 export function renderSlotContent(
@@ -7362,54 +8004,119 @@ export function renderSlotContent(
 📄 FIL: src\ui\UITypes.ts
 ==================================================
 
+export interface ResourceDetails {
+    name: string;
+    color?: string;
+    isTool?: boolean;
+    isArmor?: boolean;
+    isCraftable?: boolean; // <--- Din nya flagga
+    recipe?: Record<string, number>;
+    type?: string;
+}
+
 export const RESOURCE_COLORS: Record<string, string> = {
     dirt: "#8b5a2b",
     stone: "#808080",
     coal: "#000000",
     iron_ore: "#808080",
     iron_ingot: "#c0c0c0",
+    copper_ore: "#b87333",
+    copper_ingot: "#d97724",
+    silver_ore: "#a8a8a8",
+    silver_ingot: "#e0e0e0",
     gold_ore: "#ffd700",
+    gold_ingot: "#ffae00",
     diamond: "#00ffff",
     wood: "#5c4033",
     sand: "#e0c068",
     core: "#ff4500",
+    chest: "#8b4513",
+    bed: "#ff0000",
+    torch: "#ffcc00",
 };
 
-export const RESOURCE_INFO: Record<string, { name: string; color?: string; isTool?: boolean; isArmor?: boolean }> = {
+export const RESOURCE_INFO: Record<string, ResourceDetails> = {
     dirt: { name: "Jord", color: RESOURCE_COLORS.dirt },
     stone: { name: "Sten", color: RESOURCE_COLORS.stone },
     coal: { name: "Kol", color: RESOURCE_COLORS.coal },
-    iron_ore: { name: "Järnmalm", color: RESOURCE_COLORS.iron_ore },
-    iron_ingot: { name: "Järntacka", color: RESOURCE_COLORS.iron_ingot },
-    gold_ore: { name: "Guld", color: RESOURCE_COLORS.gold_ore },
-    diamond: { name: "Diamant", color: RESOURCE_COLORS.diamond },
     wood: { name: "Trä", color: RESOURCE_COLORS.wood },
     sand: { name: "Sand", color: RESOURCE_COLORS.sand },
-    core: { name: "Kärna", color: RESOURCE_COLORS.core },
+    iron_ore: { name: "Järnmalm", color: RESOURCE_COLORS.iron_ore },
+    copper_ore: { name: "Kopparmalm", color: RESOURCE_COLORS.copper_ore },
+    silver_ore: { name: "Silvermalm", color: RESOURCE_COLORS.silver_ore },
+    gold_ore: { name: "Guldmalm", color: RESOURCE_COLORS.gold_ore },
+    diamond: { name: "Diamant", color: RESOURCE_COLORS.diamond },
+
+    // Ingots (Smältning / Crafting)
+    iron_ingot: {
+        name: "Järntacka",
+        color: RESOURCE_COLORS.iron_ingot,
+        isCraftable: true,
+        recipe: { iron_ore: 1, coal: 1 },
+    },
+    copper_ingot: {
+        name: "Koppartacka",
+        color: RESOURCE_COLORS.copper_ingot,
+        isCraftable: true,
+        recipe: { copper_ore: 1, coal: 1 },
+    },
+    silver_ingot: {
+        name: "Silvertacka",
+        color: RESOURCE_COLORS.silver_ingot,
+        isCraftable: true,
+        recipe: { silver_ore: 1, coal: 1 },
+    },
+    gold_ingot: {
+        name: "Guldtacka",
+        color: RESOURCE_COLORS.gold_ingot,
+        isCraftable: true,
+        recipe: { gold_ore: 1, coal: 1 },
+    },
+
+    // Byggbara items & Möbler
+    chest: {
+        name: "Chest",
+        color: RESOURCE_COLORS.chest,
+        isCraftable: true,
+        recipe: { wood: 8 },
+    },
+    bed: {
+        name: "Bed",
+        color: RESOURCE_COLORS.bed,
+        isCraftable: true,
+        recipe: { wood: 5, dirt: 3 },
+    },
+    torch: {
+        name: "Torch",
+        color: RESOURCE_COLORS.torch,
+        isCraftable: true,
+        recipe: { wood: 1, coal: 1 },
+    },
+
+    // Swords
+    "Iron Sword": { name: "Iron Sword", isTool: true, type: "sword" },
+    "Diamond Sword": { name: "Diamond Sword", isTool: true, type: "sword" },
 
     // Pickaxes
-    "Wood Pickaxe": { name: "Wood Pickaxe", isTool: true },
-    "Iron Pickaxe": { name: "Iron Pickaxe", isTool: true },
-    "Gold Pickaxe": { name: "Gold Pickaxe", isTool: true },
-    "Diamond Pickaxe": { name: "Diamond Pickaxe", isTool: true },
+    "Wood Pickaxe": { name: "Wood Pickaxe", isTool: true, type: "pickaxe" },
+    "Iron Pickaxe": { name: "Iron Pickaxe", isTool: true, type: "pickaxe" },
+    "Diamond Pickaxe": { name: "Diamond Pickaxe", isTool: true, type: "pickaxe" },
 
     // Axes
-    "Wood Axe": { name: "Wood Axe", isTool: true },
-    "Iron Axe": { name: "Iron Axe", isTool: true },
-    "Gold Axe": { name: "Gold Axe", isTool: true },
-    "Diamond Axe": { name: "Diamond Axe", isTool: true },
+    "Wood Axe": { name: "Wood Axe", isTool: true, type: "axe" },
+    "Iron Axe": { name: "Iron Axe", isTool: true, type: "axe" },
+    "Diamond Axe": { name: "Diamond Axe", isTool: true, type: "axe" },
 
     // Shovels
-    "Wood Shovel": { name: "Wood Shovel", isTool: true },
-    "Iron Shovel": { name: "Iron Shovel", isTool: true },
-    "Gold Shovel": { name: "Gold Shovel", isTool: true },
-    "Diamond Shovel": { name: "Diamond Shovel", isTool: true },
+    "Wood Shovel": { name: "Wood Shovel", isTool: true, type: "shovel" },
+    "Iron Shovel": { name: "Iron Shovel", isTool: true, type: "shovel" },
+    "Diamond Shovel": { name: "Diamond Shovel", isTool: true, type: "shovel" },
 
     // Rustning
-    "Iron Helmet": { name: "Iron Helmet", isArmor: true },
-    "Leather Clothes": { name: "Leather Clothes", isArmor: true },
-    "Iron Clothes": { name: "Iron Clothes", isArmor: true },
-    "Speed Boots": { name: "Speed Boots", isArmor: true },
+    "Iron Helmet": { name: "Iron Helmet", isArmor: true, type: "helmet" },
+    "Leather Clothes": { name: "Leather Clothes", isArmor: true, type: "armor" },
+    "Iron Clothes": { name: "Iron Clothes", isArmor: true, type: "armor" },
+    "Speed Boots": { name: "Speed Boots", isArmor: true, type: "boots" },
 };
 
 

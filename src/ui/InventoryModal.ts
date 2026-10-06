@@ -1,6 +1,6 @@
 // src/ui/InventoryModal.ts
 
-import { useGameStore, ALL_TOOLS, ALL_ARMOR } from "src/store/useGameStore";
+import { useGameStore, ALL_TOOLS, ALL_ARMOR } from "store";
 import type { ToolType, EquipmentSlot } from "types";
 import { RESOURCE_INFO } from "ui";
 import { getToolIcon } from "./uiHelpers";
@@ -132,7 +132,7 @@ export class InventoryModal extends HTMLElement {
 
         const slots: { slot: EquipmentSlot; icon: string; name: string }[] = [
             { slot: "helmet", icon: "🪖", name: "Hjälm" },
-            { slot: "chest", icon: "👕", name: "Kläder" },
+            { slot: "armor", icon: "👕", name: "Kläder" },
             { slot: "boots", icon: "🥾", name: "Skor" },
         ];
 
@@ -342,7 +342,7 @@ export class InventoryModal extends HTMLElement {
                 name.style.pointerEvents = "none";
 
                 const icon = document.createElement("span");
-                icon.innerText = armorObj?.slot === "helmet" ? "🪖" : armorObj?.slot === "chest" ? "👕" : "🥾";
+                icon.innerText = armorObj?.slot === "helmet" ? "🪖" : armorObj?.slot === "armor" ? "👕" : "🥾";
                 icon.style.fontSize = "14px";
                 icon.style.pointerEvents = "none";
 

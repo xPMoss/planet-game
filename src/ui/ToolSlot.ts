@@ -1,4 +1,4 @@
-import { useGameStore, ALL_TOOLS } from "src/store/useGameStore";
+import { useGameStore, ALL_TOOLS } from "store";
 import type { ToolType } from "types";
 import { renderSlotContent, getToolIcon } from "./uiHelpers";
 

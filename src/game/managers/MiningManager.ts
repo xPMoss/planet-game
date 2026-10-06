@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { Planet } from "planet";
 import { BlockType, REQUIRED_TOOL_TYPE, REQUIRED_TOOL_POWER } from "types";
 import type { Player } from "player";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 import type { MobileInputState } from "ui";
 import type { HighlightManager } from "managers";
 
@@ -47,6 +47,8 @@ export class MiningManager {
 
         const currentTool = useGameStore.getState().currentTool;
         if (!currentTool) return;
+
+        if (!currentTool || currentTool.type === "sword") return;
 
         const target = this.highlightManager.getTargetGridPosition();
         if (!target) return;
@@ -99,6 +101,18 @@ export class MiningManager {
         const key = x + "," + y;
         const block = this.planet.blocks.get(key);
         if (!block) return;
+
+        // 1. Kontrollera om blocket tillhör ett färdigt hus och är oförstörbart
+        if ((block as any).isIndestructible) {
+            // Blinka rött för att visa spelaren att blocket inte går att förstöra
+            block.body.setTint(0xff0000);
+            this.scene.time.delayedCall(150, () => {
+                if (block.body?.active) {
+                    block.body.setTint(0xcccccc); // Återställ till husets nyans
+                }
+            });
+            return; // Avbryt brytningen!
+        }
 
         const currentTool = useGameStore.getState().currentTool;
         if (!currentTool) return;

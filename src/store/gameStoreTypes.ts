@@ -17,13 +17,18 @@ export const ALL_TOOLS: Record<ToolType, Tool> = {
     "Wood Shovel": { name: "Wood Shovel", power: 0.1, damage: 0.1, price: 0, type: "shovel", speed: 200 },
     "Iron Shovel": { name: "Iron Shovel", power: 1, damage: 1, price: 10, type: "shovel", speed: 150 },
     "Diamond Shovel": { name: "Diamond Shovel", power: 10, damage: 10, price: 100, type: "shovel", speed: 50 },
+
+    // Swords
+    "Wood Sword": { name: "Wood Sword", power: 0.1, damage: 0.1, price: 0, type: "sword", speed: 200 },
+    "Iron Sword": { name: "Iron Sword", power: 1, damage: 1, price: 10, type: "sword", speed: 150 },
+    "Diamond Sword": { name: "Diamond Sword", power: 10, damage: 10, price: 100, type: "sword", speed: 50 },
 };
 
 // Register över alla rustningsföremål
 export const ALL_ARMOR: Record<string, ArmorItem> = {
     "Iron Helmet": { name: "Iron Helmet", slot: "helmet", armor: 5, color: 0xc0c0c0 },
-    "Leather Clothes": { name: "Leather Clothes", slot: "chest", armor: 3, color: 0x8b5a2b },
-    "Iron Clothes": { name: "Iron Clothes", slot: "chest", armor: 8, color: 0xc0c0c0 },
+    "Leather Clothes": { name: "Leather Clothes", slot: "armor", armor: 3, color: 0x8b5a2b },
+    "Iron Clothes": { name: "Iron Clothes", slot: "armor", armor: 8, color: 0xc0c0c0 },
     "Speed Boots": { name: "Speed Boots", slot: "boots", armor: 2, speedBonus: 1.5, color: 0x00ffff },
 };
 
@@ -57,4 +62,5 @@ export interface GameState {
     toggleInventory: () => void;
     addResource: (type: any, amount: number) => boolean;
     removeResource: (type: any, amount: number) => void;
+    craftItem: (itemKey: string) => boolean;
 }

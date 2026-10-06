@@ -2,7 +2,7 @@ import { Hotbar } from "./Hotbar";
 import { InventoryModal } from "./InventoryModal";
 import { HealthBar } from "./HealthBar";
 import { ToolSlot } from "./ToolSlot";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 
 export class Header extends HTMLElement {
     private hotbar!: Hotbar;

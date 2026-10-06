@@ -1,4 +1,4 @@
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 import { RESOURCE_COLORS } from "ui";
 
 export class Hotbar extends HTMLElement {

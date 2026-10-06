@@ -4,7 +4,7 @@ import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture, c
 import { CATEGORY_PLAYER, CATEGORY_TERRAIN } from "planet";
 import type { MobileInputState } from "ui";
 import { BlockType } from "types";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 
 type Directions = {
     tangentX: number;
@@ -41,6 +41,8 @@ export class Player {
     private eyesGraphics!: Phaser.GameObjects.Graphics;
     private armorGraphics!: Phaser.GameObjects.Graphics; // Grafik för utrustning (hjälm, kläder, skor)
     private direction: PlayerDirection = "right";
+
+    private weaponGraphics!: Phaser.GameObjects.Graphics;
 
     // Stabil vinkel för gravitation och rotation
     private currentSnapAngle: number = 0;
@@ -106,6 +108,33 @@ export class Player {
         this.createDebug();
     }
 
+    public spawn(): void {
+        if (!this.scene.textures.exists("player_tile")) {
+            createPlayerTexture(this.scene, "player_tile", this.settings.bodyColor);
+        }
+
+        this.bodySprite = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_tile");
+        this.bodySprite.setDisplaySize(this.settings.width, this.settings.height);
+        this.bodySprite.setDepth(10);
+
+        if (!this.scene.textures.exists("player_hat")) {
+            createPlayerHatTexture(this.scene, "player_hat", this.settings.hatColor);
+            this.hat = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_hat");
+            this.hat.setScale(this.settings.hatScale);
+            this.hat.setOrigin(0.5, 1);
+            this.hat?.setDepth(12);
+        }
+
+        this.armorGraphics = this.scene.add.graphics();
+        this.armorGraphics?.setDepth(11);
+
+        this.eyesGraphics = this.scene.add.graphics();
+        this.eyesGraphics?.setDepth(13);
+
+        this.weaponGraphics = this.scene.add.graphics();
+        this.weaponGraphics.setDepth(100);
+    }
+
     private findSpawnPosition(): { x: number; y: number } {
         const radius = this.planet.config.radius;
         const mapSize = radius * 2;
@@ -158,27 +187,6 @@ export class Player {
         return { x: worldX, y: worldY };
     }
 
-    public spawn(): void {
-        if (!this.scene.textures.exists("player_tile")) {
-            createPlayerTexture(this.scene, "player_tile", this.settings.bodyColor);
-        }
-
-        this.bodySprite = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_tile");
-        this.bodySprite.setDisplaySize(this.settings.width, this.settings.height);
-
-        if (!this.scene.textures.exists("player_hat")) {
-            createPlayerHatTexture(this.scene, "player_hat", this.settings.hatColor);
-            this.hat = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_hat");
-            this.hat.setScale(this.settings.hatScale);
-            this.hat.setOrigin(0.5, 1);
-        }
-
-        this.eyesGraphics = this.scene.add.graphics();
-
-        this.armorGraphics = this.scene.add.graphics();
-        this.armorGraphics.setDepth(11);
-    }
-
     public getDirection(): PlayerDirection {
         return this.direction;
     }
@@ -192,6 +200,7 @@ export class Player {
         this.eyesGraphics?.setVisible(!boarded);
         this.armorGraphics?.setVisible(!boarded);
         this.sprite.setSensor(boarded);
+
         if (position) {
             this.sprite.setPosition(position.x, position.y);
             const body = this.sprite.body as MatterJS.BodyType;
@@ -550,6 +559,35 @@ export class Player {
         this.hat.setFlipX(this.direction.includes("left"));
     }
 
+    private drawEquipment(): void {
+        if (!this.armorGraphics || !this.sprite) return;
+
+        this.armorGraphics.clear();
+        this.armorGraphics.setPosition(this.sprite.x, this.sprite.y);
+        this.armorGraphics.setRotation(this.sprite.rotation);
+
+        const equipment = useGameStore.getState().equipment;
+
+        // 1. Kläder (Chest)
+        if (equipment.armor) {
+            this.armorGraphics.fillStyle(equipment.armor.color, 1);
+            this.armorGraphics.fillRect(-6, -4, 12, 8);
+        }
+
+        // 2. Skor (Boots)
+        if (equipment.boots) {
+            this.armorGraphics.fillStyle(equipment.boots.color, 1);
+            this.armorGraphics.fillRect(-6, 4, 5, 4);
+            this.armorGraphics.fillRect(1, 4, 5, 4);
+        }
+
+        // 3. Hjälm (Helmet)
+        if (equipment.helmet) {
+            this.armorGraphics.fillStyle(equipment.helmet.color, 1);
+            this.armorGraphics.fillRect(-7, -10, 14, 5);
+        }
+    }
+
     private drawEyes(): void {
         if (!this.eyesGraphics || !this.sprite) return;
 
@@ -576,33 +614,78 @@ export class Player {
         this.eyesGraphics.fillRect(8 + pupilOffsetX, -12 + pupilOffsetY, 8, 8);
     }
 
-    private drawEquipment(): void {
-        if (!this.armorGraphics || !this.sprite) return;
+    // src/game/player/Player.ts
+    // src/game/player/Player.ts
 
-        this.armorGraphics.clear();
-        this.armorGraphics.setPosition(this.sprite.x, this.sprite.y);
-        this.armorGraphics.setRotation(this.sprite.rotation);
+    public swingWeapon(): void {
+        if (!this.weaponGraphics || !this.sprite) return;
 
-        const equipment = useGameStore.getState().equipment;
+        // Rensa tidigare tweens & grafik
+        this.scene.tweens.killTweensOf(this.weaponGraphics);
+        this.weaponGraphics.clear();
+        this.weaponGraphics.setAlpha(1);
+        this.weaponGraphics.setPosition(this.sprite.x, this.sprite.y);
+        this.weaponGraphics.setRotation(this.sprite.rotation);
 
-        // 1. Kläder (Chest)
-        if (equipment.chest) {
-            this.armorGraphics.fillStyle(equipment.chest.color, 1);
-            this.armorGraphics.fillRect(-6, -4, 12, 8);
+        const radius = 30;
+
+        // Vinkeloffset för de 8 riktningarna relativt spelarens lokala koordinatsystem
+        let baseAngle = 0;
+
+        switch (this.direction) {
+            case "right":
+                baseAngle = 0;
+                break;
+            case "down-right":
+                baseAngle = Math.PI * 0.25;
+                break;
+            case "down":
+                baseAngle = Math.PI * 0.5;
+                break;
+            case "down-left":
+                baseAngle = Math.PI * 0.75;
+                break;
+            case "left":
+                baseAngle = Math.PI;
+                break;
+            case "up-left":
+                baseAngle = -Math.PI * 0.75;
+                break;
+            case "up":
+                baseAngle = -Math.PI * 0.5;
+                break;
+            case "up-right":
+                baseAngle = -Math.PI * 0.25;
+                break;
         }
 
-        // 2. Skor (Boots)
-        if (equipment.boots) {
-            this.armorGraphics.fillStyle(equipment.boots.color, 1);
-            this.armorGraphics.fillRect(-6, 4, 5, 4);
-            this.armorGraphics.fillRect(1, 4, 5, 4);
-        }
+        // Bågens bredd (cirka 90 grader)
+        const arcHalfWidth = Math.PI * 0.25;
+        const startAngle = baseAngle - arcHalfWidth;
+        const endAngle = baseAngle + arcHalfWidth;
 
-        // 3. Hjälm (Helmet)
-        if (equipment.helmet) {
-            this.armorGraphics.fillStyle(equipment.helmet.color, 1);
-            this.armorGraphics.fillRect(-7, -10, 14, 5);
-        }
+        // Yttre neonbåge (Cyan/Blå)
+        this.weaponGraphics.lineStyle(8, 0x00ffff, 0.8);
+        this.weaponGraphics.beginPath();
+        this.weaponGraphics.arc(0, 0, radius, startAngle, endAngle, false);
+        this.weaponGraphics.strokePath();
+
+        // Inre skarp vit klinga
+        this.weaponGraphics.lineStyle(3, 0xffffff, 1.0);
+        this.weaponGraphics.beginPath();
+        this.weaponGraphics.arc(0, 0, radius - 2, startAngle, endAngle, false);
+        this.weaponGraphics.strokePath();
+
+        // Tona ut grafiken
+        this.scene.tweens.add({
+            targets: this.weaponGraphics,
+            alpha: 0,
+            duration: 180,
+            ease: "Cubic.out",
+            onComplete: () => {
+                this.weaponGraphics.clear();
+            },
+        });
     }
 
     private createDebug() {

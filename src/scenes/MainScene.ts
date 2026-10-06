@@ -3,11 +3,13 @@ import { Planet, DEFAULT_PLANET_CONFIG } from "planet";
 import { Player } from "player";
 import { Rocket } from "../game/rocket";
 import { CameraController } from "camera";
-import { MiningManager, HighlightManager, BuildingManager } from "managers";
+import { MiningManager, HighlightManager, BuildingManager, CombatManager } from "managers";
 //import { VirtualJoystick } from "phaser-virtual-joystick";
 import { Starfield } from "../game/background/Starfield";
+import { HouseManager } from "house";
 
 import { Header, MobileControls, VirtualJoystick } from "ui";
+import { useGameStore } from "store";
 
 export class MainScene extends Phaser.Scene {
   private planet!: Planet;
@@ -15,9 +17,11 @@ export class MainScene extends Phaser.Scene {
   private rocket!: Rocket;
   private starfield!: Starfield;
   private cameraController!: CameraController;
+  private combatManager!: CombatManager;
   private highlightManager!: HighlightManager;
   private miningManager!: MiningManager;
   private buildingManager!: BuildingManager;
+  public houseManager!: HouseManager;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
   mobileControls!: MobileControls;
@@ -57,9 +61,13 @@ export class MainScene extends Phaser.Scene {
     this.rocket.setPlayerAndCamera(this.player, this.cameraController);
 
     // Initiera Highlight Manager först och skicka med den till Mining och Building
+
+    this.houseManager = new HouseManager(this, this.planet, this.player);
+    this.combatManager = new CombatManager(this, this.player);
+
     this.highlightManager = new HighlightManager(this, this.planet, this.player);
     this.miningManager = new MiningManager(this, this.planet, this.player, this.highlightManager);
-    this.buildingManager = new BuildingManager(this, this.planet, this.player, this.highlightManager);
+    this.buildingManager = new BuildingManager(this, this.planet, this.player, this.highlightManager, this.houseManager);
 
     // Keyboard input
     if (this.input.keyboard) {
@@ -99,8 +107,18 @@ export class MainScene extends Phaser.Scene {
 
     // Uppdatera markören samt båda managers med mobiltillståndet
     this.highlightManager.update();
-    this.miningManager.update(this.mobileControls.state);
+
+    if (this.mobileControls?.state.primaryAction) {
+      const currentTool = useGameStore.getState().currentTool;
+      if (currentTool?.type === "sword") {
+        this.combatManager.attack();
+      } else {
+        this.miningManager.mineInFront();
+      }
+    }
+
     this.buildingManager.update(this.mobileControls.state);
+    this.houseManager.update();
   }
 
   private createDebug() {

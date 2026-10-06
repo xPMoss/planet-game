@@ -19,6 +19,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     heal: (amount) => set((state) => ({ hp: Math.min(state.maxHp, state.hp + amount) })),
 
     inventory: {
+        "Iron Sword": 1,
         // Startverktyg
         "Wood Pickaxe": 1,
         "Iron Pickaxe": 1,
@@ -48,11 +49,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         core: 0,
     },
     maxSlots: MAX_INVENTORY_SLOTS,
-    currentTool: ALL_TOOLS["Wood Pickaxe"],
+    currentTool: ALL_TOOLS["Iron Sword"],
 
     equipment: {
         helmet: null,
-        chest: null,
+        armor: null,
         boots: null,
     },
 
@@ -116,6 +117,33 @@ export const useGameStore = create<GameState>((set, get) => ({
                 currentTool: tool,
             };
         }),
+
+    craftItem: (itemKey: string) => {
+        const info = RESOURCE_INFO[itemKey];
+        if (!info || !info.isCraftable || !info.recipe) return false;
+
+        const state = get();
+        const inventory = state.inventory;
+
+        // Kontrollera om spelaren har tillräckligt av alla ingredienser
+        const hasIngredients = Object.entries(info.recipe).every(
+            ([ingredient, neededAmount]) => (inventory[ingredient] || 0) >= neededAmount,
+        );
+
+        if (!hasIngredients || !state.canPickUp()) return false;
+
+        // Dra av ingredienserna från inventory
+        const newInventory = { ...inventory };
+        Object.entries(info.recipe).forEach(([ingredient, neededAmount]) => {
+            newInventory[ingredient] -= neededAmount;
+        });
+
+        // Lägg till den tillverkade enheten (t.ex. 1 ingot eller 1 chest)
+        newInventory[itemKey] = (newInventory[itemKey] || 0) + 1;
+
+        set({ inventory: newInventory });
+        return true;
+    },
 
     setSelectedResource: (resource) => set({ selectedResource: resource }),
 

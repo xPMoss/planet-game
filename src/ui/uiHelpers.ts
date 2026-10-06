@@ -2,9 +2,11 @@ import type { Tool } from "types";
 
 export function getToolIcon(tool?: Tool | null): string {
     if (!tool) return "";
+    if (tool.type === "pickaxe") return "⛏️";
     if (tool.type === "axe") return "🪓";
     if (tool.type === "shovel") return "🧹";
-    return "⛏️";
+    if (tool.type === "sword") return "⚔️️";
+    return "";
 }
 
 export function renderSlotContent(

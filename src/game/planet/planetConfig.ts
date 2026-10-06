@@ -112,6 +112,9 @@ export const DEFAULT_PLANET_CONFIG: PlanetConfig = {
         [BlockType.DIAMOND]: 15,
         [BlockType.WOOD]: 2,
         [BlockType.DIRT]: 1,
+        [BlockType.CHEST]: 2,
+        [BlockType.BED]: 1,
+        [BlockType.TORCH]: 1,
         [BlockType.AIR]: 0,
     },
 };

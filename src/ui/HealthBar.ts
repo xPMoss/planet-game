@@ -1,4 +1,4 @@
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 
 export class HealthBar extends HTMLElement {
     private barFill!: HTMLDivElement;

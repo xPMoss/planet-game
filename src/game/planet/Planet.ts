@@ -4,7 +4,7 @@ import { SimplexNoise } from "./planetHelpers";
 import { DEFAULT_PLANET_CONFIG, type PlanetConfig } from "./planetConfig";
 import { PlanetOutline, CATEGORY_TERRAIN, CATEGORY_LOOT } from "./planetOutline";
 import { PLANET_BIOMES, type PlanetType, type PlanetBiomeConfig } from "./planetConfig";
-import { useGameStore } from "src/store/useGameStore";
+import { useGameStore } from "store";
 import type { ResourceType } from "types";
 
 export interface ExtendedPlanetConfig extends PlanetConfig {
@@ -50,6 +50,11 @@ export class Planet {
     this.createBlockTexture("wood_tile", 0x5c4033);
     this.createBlockTexture("leaves_tile", 0x228b22);
     this.createBlockTexture("sand_tile", colors.sand_tile || 0xe0c068);
+
+    // Nya texturer
+    this.createBlockTexture("chest_tile", 0x8b4513);
+    this.createBlockTexture("bed_tile", 0xff0000);
+    this.createBlockTexture("torch_tile", 0xffcc00);
   }
 
   private createBlockTexture(key: string, color: number): void {
@@ -298,21 +303,6 @@ export class Planet {
       return this.config.blockHp[type];
     }
     return 1;
-  }
-
-  private getTextureKey(blockType: BlockType): string {
-    if (blockType === BlockType.CORE) return "core_tile";
-    if (blockType === BlockType.STONE) return "stone_tile";
-    if (blockType === BlockType.IRON_ORE) return "iron_ore_tile";
-    if (blockType === BlockType.COPPER_ORE) return "copper_ore_tile";
-    if (blockType === BlockType.SILVER_ORE) return "silver_ore_tile";
-    if (blockType === BlockType.GOLD_ORE) return "gold_ore_tile";
-    if (blockType === BlockType.DIAMOND) return "diamond_tile";
-    if (blockType === BlockType.COAL) return "coal_tile";
-    if (blockType === BlockType.WOOD) return "wood_tile";
-    if (blockType === BlockType.LEAVES) return "leaves_tile";
-    if (blockType === BlockType.SAND) return "sand_tile";
-    return "dirt_tile";
   }
 
   public isFullyMined(): boolean {
@@ -570,20 +560,6 @@ export class Planet {
     this.scene.events.on("update", updateListener);
   }
 
-  private mapBlockToResource(type: BlockType): ResourceType | null {
-    if (type === BlockType.DIRT) return "dirt";
-    if (type === BlockType.STONE) return "stone";
-    if (type === BlockType.COAL) return "coal";
-    if (type === BlockType.IRON_ORE) return "iron_ore";
-    if (type === BlockType.COPPER_ORE) return "copper_ore";
-    if (type === BlockType.SILVER_ORE) return "silver_ore";
-    if (type === BlockType.GOLD_ORE) return "gold_ore";
-    if (type === BlockType.DIAMOND) return "diamond";
-    if (type === BlockType.WOOD) return "wood";
-    if (type === BlockType.SAND) return "sand";
-    return null;
-  }
-
   public placeBlock(x: number, y: number, blockType: BlockType): boolean {
     const key = x + "," + y;
     if (this.blocks.has(key)) return false;
@@ -620,5 +596,40 @@ export class Planet {
     this.drawOutline();
 
     return true;
+  }
+
+  private getTextureKey(blockType: BlockType): string {
+    if (blockType === BlockType.CORE) return "core_tile";
+    if (blockType === BlockType.STONE) return "stone_tile";
+    if (blockType === BlockType.IRON_ORE) return "iron_ore_tile";
+    if (blockType === BlockType.COPPER_ORE) return "copper_ore_tile";
+    if (blockType === BlockType.SILVER_ORE) return "silver_ore_tile";
+    if (blockType === BlockType.GOLD_ORE) return "gold_ore_tile";
+    if (blockType === BlockType.DIAMOND) return "diamond_tile";
+    if (blockType === BlockType.COAL) return "coal_tile";
+    if (blockType === BlockType.WOOD) return "wood_tile";
+    if (blockType === BlockType.LEAVES) return "leaves_tile";
+    if (blockType === BlockType.SAND) return "sand_tile";
+    if (blockType === BlockType.CHEST) return "chest_tile";
+    if (blockType === BlockType.BED) return "bed_tile";
+    if (blockType === BlockType.TORCH) return "torch_tile";
+    return "dirt_tile";
+  }
+
+  private mapBlockToResource(type: BlockType): ResourceType | null {
+    if (type === BlockType.DIRT) return "dirt";
+    if (type === BlockType.STONE) return "stone";
+    if (type === BlockType.COAL) return "coal";
+    if (type === BlockType.IRON_ORE) return "iron_ore";
+    if (type === BlockType.COPPER_ORE) return "copper_ore";
+    if (type === BlockType.SILVER_ORE) return "silver_ore";
+    if (type === BlockType.GOLD_ORE) return "gold_ore";
+    if (type === BlockType.DIAMOND) return "diamond";
+    if (type === BlockType.WOOD) return "wood";
+    if (type === BlockType.SAND) return "sand";
+    if (type === BlockType.CHEST) return "chest";
+    if (type === BlockType.BED) return "bed";
+    if (type === BlockType.TORCH) return "torch";
+    return null;
   }
 }
