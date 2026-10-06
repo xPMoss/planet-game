@@ -170,7 +170,7 @@ export class HouseManager {
         // Placera ritningen lite framför spelaren
         return {
             x: playerGridX + 2,
-            y: playerGridY - BLUEPRINT_HEIGHT + 2,
+            y: playerGridY - BLUEPRINT_HEIGHT + 1,
         };
     }
 
