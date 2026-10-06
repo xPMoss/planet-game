@@ -26,7 +26,8 @@ export const ALL_TOOLS: Record<ToolType, Tool> = {
 
 // Register över alla rustningsföremål
 export const ALL_ARMOR: Record<string, ArmorItem> = {
-    "Iron Helmet": { name: "Iron Helmet", slot: "helmet", armor: 5, color: 0xc0c0c0 },
+    "Red Hat": { name: "Red Hat", slot: "helmet", armor: 1, color: 0xff0000, textureKey: "red_hat" },
+    "Iron Helmet": { name: "Iron Helmet", slot: "helmet", armor: 5, color: 0xc0c0c0, textureKey: "iron_helmet" },
     "Leather Clothes": { name: "Leather Clothes", slot: "armor", armor: 3, color: 0x8b5a2b },
     "Iron Clothes": { name: "Iron Clothes", slot: "armor", armor: 8, color: 0xc0c0c0 },
     "Speed Boots": { name: "Speed Boots", slot: "boots", armor: 2, speedBonus: 1.5, color: 0x00ffff },

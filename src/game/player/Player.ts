@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Planet } from "planet";
-import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createPlayerHatTexture, createPlayerTexture } from "player";
+import { type PlayerSettings, DEFAULT_PLAYER_SETTINGS, createIronHelmetTexture, createPlayerHatTexture, createPlayerTexture } from "player";
 import { CATEGORY_PLAYER, CATEGORY_TERRAIN } from "planet";
 import type { MobileInputState } from "ui";
 import { BlockType } from "types";
@@ -37,7 +37,7 @@ export class Player {
     private lastJumpTime: number = 0;
 
     private bodySprite!: Phaser.GameObjects.Sprite; // Separat visningsgrafik för kroppen
-    private hat!: Phaser.GameObjects.Sprite;
+    private helmetSprite!: Phaser.GameObjects.Sprite;
     private eyesGraphics!: Phaser.GameObjects.Graphics;
     private armorGraphics!: Phaser.GameObjects.Graphics; // Grafik för utrustning (hjälm, kläder, skor)
     private direction: PlayerDirection = "right";
@@ -117,13 +117,19 @@ export class Player {
         this.bodySprite.setDisplaySize(this.settings.width, this.settings.height);
         this.bodySprite.setDepth(10);
 
-        if (!this.scene.textures.exists("player_hat")) {
-            createPlayerHatTexture(this.scene, "player_hat", this.settings.hatColor);
-            this.hat = this.scene.add.sprite(this.sprite.x, this.sprite.y, "player_hat");
-            this.hat.setScale(this.settings.hatScale);
-            this.hat.setOrigin(0.5, 1);
-            this.hat?.setDepth(12);
+        if (!this.scene.textures.exists("red_hat")) {
+            createPlayerHatTexture(this.scene, "red_hat", this.settings.hatColor);
         }
+
+        if (!this.scene.textures.exists("iron_helmet")) {
+            createIronHelmetTexture(this.scene, "iron_helmet", 0xc0c0c0);
+        }
+
+        this.helmetSprite = this.scene.add.sprite(this.sprite.x, this.sprite.y, "red_hat");
+        this.helmetSprite.setScale(this.settings.hatScale);
+        this.helmetSprite.setOrigin(0.5, 1);
+        this.helmetSprite?.setDepth(12);
+        this.helmetSprite.setVisible(false);
 
         this.armorGraphics = this.scene.add.graphics();
         this.armorGraphics?.setDepth(11);
@@ -132,7 +138,7 @@ export class Player {
         this.eyesGraphics?.setDepth(13);
 
         this.weaponGraphics = this.scene.add.graphics();
-        this.weaponGraphics.setDepth(100);
+        this.weaponGraphics.setDepth(15);
     }
 
     private findSpawnPosition(): { x: number; y: number } {
@@ -196,7 +202,7 @@ export class Player {
     public setBoarded(boarded: boolean, position?: { x: number; y: number }): void {
         this.isBoarded = boarded;
         this.bodySprite?.setVisible(!boarded);
-        this.hat?.setVisible(!boarded);
+        this.helmetSprite?.setVisible(!boarded);
         this.eyesGraphics?.setVisible(!boarded);
         this.armorGraphics?.setVisible(!boarded);
         this.sprite.setSensor(boarded);
@@ -225,7 +231,7 @@ export class Player {
         if (this.isBoarded) return;
         this.updatePlayer(cursors, mobileState, joystickState);
         this.updateBodyPosition();
-        this.updateHatPosition();
+        this.updateHelmetPosition();
         this.drawEyes();
         this.drawEquipment();
         this.updateDebugGraphics();
@@ -543,8 +549,30 @@ export class Player {
         this.bodySprite.setRotation(currentRotation);
     }
 
-    private updateHatPosition(): void {
-        if (!this.hat || !this.sprite) return;
+    private updateHelmetPosition(): void {
+        if (!this.helmetSprite || !this.sprite) return;
+
+        const helmet = useGameStore.getState().equipment.helmet;
+
+        // Om ingen hjälm/hatt är utrustad -> dölj spriten
+        if (!helmet) {
+            this.helmetSprite.setVisible(false);
+            return;
+        }
+
+        this.helmetSprite.setVisible(true);
+
+        // Byt textur dynamiskt om föremålet har en definierad textureKey
+        if (helmet.textureKey && this.scene.textures.exists(helmet.textureKey)) {
+            this.helmetSprite.setTexture(helmet.textureKey);
+        }
+
+        // Applicera färg/tint om det finns angivet
+        if (helmet.color) {
+            this.helmetSprite.setTint(helmet.color);
+        } else {
+            this.helmetSprite.clearTint();
+        }
 
         const currentRotation = this.sprite.rotation;
         const upAngle = currentRotation - Math.PI / 2;
@@ -554,9 +582,9 @@ export class Player {
 
         const headOffset = this.settings.height / 2 + 2;
 
-        this.hat.setPosition(this.sprite.x + upX * headOffset, this.sprite.y + upY * headOffset);
-        this.hat.setRotation(currentRotation);
-        this.hat.setFlipX(this.direction.includes("left"));
+        this.helmetSprite.setPosition(this.sprite.x + upX * headOffset, this.sprite.y + upY * headOffset);
+        this.helmetSprite.setRotation(currentRotation);
+        this.helmetSprite.setFlipX(this.direction.includes("left"));
     }
 
     private drawEquipment(): void {
@@ -583,8 +611,6 @@ export class Player {
 
         // 3. Hjälm (Helmet)
         if (equipment.helmet) {
-            this.armorGraphics.fillStyle(equipment.helmet.color, 1);
-            this.armorGraphics.fillRect(-7, -10, 14, 5);
         }
     }
 

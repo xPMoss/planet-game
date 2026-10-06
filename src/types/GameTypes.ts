@@ -74,6 +74,7 @@ export interface ArmorItem {
     armor: number; // Ger skydd / minskar skada
     speedBonus?: number; // T.ex. skor som gör att man springer snabbare
     color: number; // Färg som ritas på spelaren
+    textureKey?: string; // Unik textur för spriten på huvud/kropp
 }
 
 // Krav på verktygstyp för respektive block

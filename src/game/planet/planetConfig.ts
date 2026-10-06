@@ -92,7 +92,7 @@ export interface PlanetConfig {
 }
 
 export const DEFAULT_PLANET_CONFIG: PlanetConfig = {
-    radius: 30,
+    radius: 20,
     blockSize: 16,
     gravityStrength: 1,
     outlineDepth: 10,

@@ -107,6 +107,7 @@ export const RESOURCE_INFO: Record<string, ResourceDetails> = {
     "Diamond Shovel": { name: "Diamond Shovel", isTool: true, type: "shovel" },
 
     // Rustning
+    "Red Hat": { name: "Red Hat", isArmor: true, type: "helmet" },
     "Iron Helmet": { name: "Iron Helmet", isArmor: true, type: "helmet" },
     "Leather Clothes": { name: "Leather Clothes", isArmor: true, type: "armor" },
     "Iron Clothes": { name: "Iron Clothes", isArmor: true, type: "armor" },

@@ -29,6 +29,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         "Wood Shovel": 1,
 
         // Rustning
+        "Red Hat": 1,
         "Iron Helmet": 1,
         "Leather Clothes": 1,
         "Speed Boots": 1,
@@ -49,10 +50,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         core: 0,
     },
     maxSlots: MAX_INVENTORY_SLOTS,
-    currentTool: ALL_TOOLS["Iron Sword"],
+    currentTool: ALL_TOOLS["Iron Pickaxe"],
 
     equipment: {
-        helmet: null,
+        helmet: ALL_ARMOR["Red Hat"],
         armor: null,
         boots: null,
     },

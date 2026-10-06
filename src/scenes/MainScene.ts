@@ -138,9 +138,9 @@ export class MainScene extends Phaser.Scene {
       lineOpacity?: number;
     };
 
-    debugConfig.showBody = true;
-    debugConfig.showStaticBody = true;
-    debugConfig.showVelocity = true;
+    debugConfig.showBody = false;
+    debugConfig.showStaticBody = false;
+    debugConfig.showVelocity = false;
 
     // Sätt tydliga färger och opacitet för spelaren
     debugConfig.fillColor = 0x00ff00; // Grön fyllning
