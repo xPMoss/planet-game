@@ -20,6 +20,7 @@ planet-game/
 │   │   ├── dirt.png
 │   │   ├── grass.png
 │   │   ├── grass1.png
+│   │   ├── inventory.png
 │   │   ├── leaves.png
 │   │   ├── red_hat.png
 │   │   ├── stone.png
@@ -85,8 +86,8 @@ planet-game/
 │       ├── HealthBar.ts
 │       ├── Hotbar.ts
 │       ├── InventoryModal.ts
+│       ├── MenuModal.ts
 │       ├── MobileControls.ts
-│       ├── ToolSlot.ts
 │       ├── VirtualJoystick.ts
 │       ├── index.ts
 │       └── uiHelpers.ts
@@ -568,7 +569,7 @@ async function bootstrap() {
 
     //const debugScene = new DebugScene(gameEngine.app, gameEngine.world, gameEngine.stageContainer);
     const mainScene = new MainScene(gameEngine.app, gameEngine.world, gameEngine.stageContainer);
-    const spaceScene = new SpaceScene(gameEngine.app, gameEngine.world, gameEngine.stageContainer);
+    //const spaceScene = new SpaceScene(gameEngine.app, gameEngine.world, gameEngine.stageContainer);
     mainScene.start();
 }
 
@@ -1665,7 +1666,7 @@ import { BlockType, type BlockData, COLLIDER_GROUPS } from "types";
 import { DEFAULT_PLANET_CONFIG, type PlanetConfig } from "./planetConfig";
 import { PLANET_BIOMES, type PlanetType, type PlanetBiomeConfig } from "./planetConfig";
 
-import { SimplexNoise } from "./planetHelpers";
+import { SimplexNoise, getBlockColor, getBlockTexturePath } from "./planetHelpers";
 
 export interface ExtendedPlanetConfig extends PlanetConfig {
   planetType?: PlanetType;
@@ -1705,33 +1706,30 @@ export class Planet {
 
   // Lägg till denna metod i Planet-klassen (src/game/planet/Planet.ts)
 
-  public findSpawnPosition(angleOffset: number = 0): { x: number; y: number } {
+  public findSpawnPosition(angleOffset: number = 0, spawnDistanceMultiplier: number = 1.5): { x: number; y: number } {
     const radius = this.config.radius;
     const blockSize = this.config.blockSize;
     const mapSize = radius * 2;
 
-    // Utgå från toppen av planeten (-Math.PI / 2) plus eventuell offset
     const angle = -Math.PI / 2 + angleOffset;
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
 
     let surfaceBlockPos: { x: number; y: number } | null = null;
+    const surfaceType = this.biome.surfaceBlock;
 
-    // Sök utifrån och in för att hitta det yttersta GRÄSBLOCKET (ytan)
     for (let r = mapSize; r >= Math.floor(radius * 0.3); r--) {
       const checkX = Math.floor(this.center.x / blockSize + dirX * r);
       const checkY = Math.floor(this.center.y / blockSize + dirY * r);
       const key = checkX + "," + checkY;
 
       const block = this.blocks.get(key);
-      // Vi vill enbart hitta det riktiga ytorganet (t.ex. gräs), inte träd/löv/surface-objekt
-      if (block && block.type === BlockType.GRASS) {
+      if (block && block.type === surfaceType) {
         surfaceBlockPos = { x: checkX, y: checkY };
         break;
       }
     }
 
-    // Fallback till vanliga blocket om gräs mot förmodan saknas i biom-konfigen
     if (!surfaceBlockPos) {
       for (let r = mapSize; r >= Math.floor(radius * 0.3); r--) {
         const checkX = Math.floor(this.center.x / blockSize + dirX * r);
@@ -1739,7 +1737,13 @@ export class Planet {
         const key = checkX + "," + checkY;
 
         const block = this.blocks.get(key);
-        if (block && block.type !== BlockType.AIR && block.type !== BlockType.WOOD && block.type !== BlockType.LEAVES) {
+        if (
+          block &&
+          block.type !== BlockType.AIR &&
+          block.type !== BlockType.WOOD &&
+          block.type !== BlockType.LEAVES &&
+          block.type !== BlockType.CACTUS
+        ) {
           surfaceBlockPos = { x: checkX, y: checkY };
           break;
         }
@@ -1750,18 +1754,16 @@ export class Planet {
       const worldX = surfaceBlockPos.x * blockSize + blockSize / 2;
       const worldY = surfaceBlockPos.y * blockSize + blockSize / 2;
 
-      // Placera precis ovanför gräsblocket
-      const spawnDistance = blockSize * 1.5;
+      const spawnDistance = blockSize * spawnDistanceMultiplier;
       return {
         x: worldX + dirX * spawnDistance,
         y: worldY + dirY * spawnDistance,
       };
     }
 
-    // Absolut fallback
     return {
       x: this.center.x,
-      y: this.center.y - (radius * blockSize + 40),
+      y: this.center.y - (radius * blockSize + 60),
     };
   }
 
@@ -1793,7 +1795,7 @@ export class Planet {
         }
 
         const frameRect = this.getBlockTile(block.x, block.y, tileSize, snappedRotation, block.type);
-        const texturePath = this.getBlockTexturePath(block.type);
+        const texturePath = getBlockTexturePath(block.type);
 
         // Ladda (eller hämta från cache) och applicera rätt ram direkt
         Assets.load(texturePath)
@@ -2053,6 +2055,7 @@ export class Planet {
       snappedRotation = dy > 0 ? Math.PI : 0;
     }
 
+    /*
     // Skapa spriten direkt med en vit placeholder (eller färgtextur om du vill)
     const sprite = new Sprite(Texture.WHITE);
     sprite.anchor.set(0.5);
@@ -2063,6 +2066,20 @@ export class Planet {
     sprite.rotation = snappedRotation;
 
     this.container.addChild(sprite);
+    */
+
+    const graphics = new Graphics();
+
+    // Färger baserat på blocktyp
+    let color = getBlockColor(blockType);
+
+    graphics.rect(-blockSize / 2, -blockSize / 2, blockSize, blockSize);
+    graphics.fill({ color: color });
+    graphics.stroke({ width: 1, color: 0x000000, alpha: 0.2 });
+
+    graphics.x = worldX;
+    graphics.y = worldY;
+    this.container.addChild(graphics);
 
     this.blocks.set(key, {
       x,
@@ -2070,7 +2087,7 @@ export class Planet {
       type: blockType,
       hp: 1,
       maxHp: 1,
-      body: sprite,
+      body: graphics,
       colliderGroup: colliderGroup,
     });
 
@@ -2085,11 +2102,10 @@ export class Planet {
     const worldX = x * blockSize + blockSize / 2;
     const worldY = y * blockSize + blockSize / 2;
 
-    /*
     const graphics = new Graphics();
 
     // Färger baserat på blocktyp
-    let color = this.getBlockColor(blockType);
+    let color = getBlockColor(blockType);
 
     graphics.rect(-blockSize / 2, -blockSize / 2, blockSize, blockSize);
     graphics.fill({ color: color });
@@ -2098,29 +2114,6 @@ export class Planet {
     graphics.x = worldX;
     graphics.y = worldY;
     this.container.addChild(graphics);
-*/
-
-    const sprite = new Sprite(Texture.WHITE); // Sätt en placeholder-textur direkt
-    sprite.anchor.set(0.5);
-    sprite.width = blockSize;
-    sprite.height = blockSize;
-    sprite.x = worldX;
-    sprite.y = worldY;
-
-    const texturePath = this.getBlockTexturePath(blockType);
-
-    // Ladda texturen via PixiJS Assets
-    Assets.load(texturePath)
-      .then((texture) => {
-        texture.source.scaleMode = "nearest"; // För pixel-art stil
-        sprite.texture = texture;
-      })
-      .catch(() => {
-        // Fallback om texturen inte hittas
-        console.warn("Kunde inte ladda textur för blocktyp:", blockType);
-      });
-
-    this.container.addChild(sprite);
 
     this.blocks.set(key, {
       x,
@@ -2128,7 +2121,7 @@ export class Planet {
       type: blockType,
       hp: 1,
       maxHp: 1,
-      body: sprite,
+      body: graphics,
       colliderGroup: COLLIDER_GROUPS.CATEGORY_TERRAIN,
     });
 
@@ -2225,45 +2218,6 @@ export class Planet {
     }
   }
 
-  private getBlockColor(blockType: BlockType): number {
-    // Färger baserat på blocktyp
-    let color = 0x808080; // Standard sten (grå)
-    if (blockType === BlockType.CORE) {
-      color = 0xff4500; // Orange/Röd
-    } else if (blockType === BlockType.GRASS) {
-      color = 0x2e8b57; // Grön
-    } else if (blockType === BlockType.DIRT) {
-      color = 0x8b5a2b; // Brun
-    } else if (blockType === BlockType.STONE) {
-      color = 0x808080; // Grå
-    } else if (blockType === BlockType.WOOD) {
-      color = 0x5c4033; // Brun
-    } else if (blockType === BlockType.SAND) {
-      color = 0xf4a460; // Brunaktig
-    } else if (blockType === BlockType.COAL) {
-      color = 0x1a1a1a; // Svart
-    } else if (blockType === BlockType.IRON_ORE) {
-      color = 0x808080; // Grå (ojka i originalet)
-    } else if (blockType === BlockType.COPPER_ORE) {
-      color = 0xcd7f32; // Bronsfärg (ojka i originalet)
-    } else if (blockType === BlockType.SILVER_ORE) {
-      color = 0xc0c0c0; // Silverfärg
-    } else if (blockType === BlockType.GOLD_ORE) {
-      color = 0xffd700; // Guld
-    } else if (blockType === BlockType.DIAMOND) {
-      color = 0x00ffff; // Turkos
-    } else if (blockType === BlockType.CHEST) {
-      color = 0x8b5a2b; // Brun
-    } else if (blockType === BlockType.BED) {
-      color = 0x8b0000; // Röd
-    } else if (blockType === BlockType.TORCH) {
-      color = 0xffa500; // Orange
-    } else if (blockType === BlockType.LEAVES) {
-      color = 0x228b22; // Orange
-    }
-    return color;
-  }
-
   // Lägg till denna hjälpfunktion i Planet-klassen
   private getBlockTile(x: number, y: number, tileSize: number, snappedRotation: number, blockType: BlockType): Rectangle {
     const rotIndex = Math.round((snappedRotation % (Math.PI * 2)) / (Math.PI / 2) + 4) % 4;
@@ -2290,42 +2244,6 @@ export class Planet {
     }
 
     return new Rectangle(col * tileSize, row * tileSize, tileSize, tileSize);
-  }
-
-  //
-  private getBlockTexturePath(blockType: BlockType): string {
-    switch (blockType) {
-      case BlockType.STONE:
-        return "./src/assets/blocks.png";
-      case BlockType.DIRT:
-        return "./src/assets/blocks.png"; // Skapa/lägg till vid behov
-      case BlockType.GRASS:
-        return "./src/assets/blocks.png";
-      case BlockType.WOOD:
-        return "./src/assets/blocks.png";
-      case BlockType.LEAVES:
-        return "./src/assets/blocks.png";
-      case BlockType.COAL:
-        return "./src/assets/blocks.png";
-      case BlockType.IRON_ORE:
-        return "./src/assets/blocks.png";
-      case BlockType.COPPER_ORE:
-        return "./src/assets/blocks.png";
-      case BlockType.SILVER_ORE:
-        return "./src/assets/blocks.png";
-      case BlockType.GOLD_ORE:
-        return "./src/assets/blocks.png";
-      case BlockType.DIAMOND:
-        return "./src/assets/blocks.png";
-      case BlockType.CHEST:
-        return "./src/assets/blocks.png";
-      case BlockType.BED:
-        return "./src/assets/blocks.png";
-      case BlockType.TORCH:
-        return "./src/assets/blocks.png";
-      default:
-        return "./src/assets/blocks.png";
-    }
   }
 
   //
@@ -2611,8 +2529,94 @@ TYP: KÄLLKOD
 FIL: src\game\planet\planetHelpers.ts
 ==================================================
 
+import { BlockType } from "types";
+
 export type { PlanetConfig } from "./planetConfig";
 export { DEFAULT_PLANET_CONFIG } from "./planetConfig";
+
+export function getBlockColor(blockType: BlockType): number {
+  // Färger baserat på blocktyp
+  let color = 0x808080; // Standard sten (grå)
+  if (blockType === BlockType.CORE) {
+    color = 0xff4500; // Orange/Röd
+  } else if (blockType === BlockType.GRASS) {
+    color = 0x2e8b57; // Grön
+  } else if (blockType === BlockType.DIRT) {
+    color = 0x8b5a2b; // Brun
+  } else if (blockType === BlockType.STONE) {
+    color = 0x808080; // Grå
+  } else if (blockType === BlockType.WOOD) {
+    color = 0x5c4033; // Brun
+  } else if (blockType === BlockType.SAND) {
+    color = 0xf4a460; // Brunaktig
+  } else if (blockType === BlockType.COAL) {
+    color = 0x1a1a1a; // Svart
+  } else if (blockType === BlockType.IRON_ORE) {
+    color = 0x808080; // Grå (ojka i originalet)
+  } else if (blockType === BlockType.COPPER_ORE) {
+    color = 0xcd7f32; // Bronsfärg (ojka i originalet)
+  } else if (blockType === BlockType.SILVER_ORE) {
+    color = 0xc0c0c0; // Silverfärg
+  } else if (blockType === BlockType.GOLD_ORE) {
+    color = 0xffd700; // Guld
+  } else if (blockType === BlockType.DIAMOND) {
+    color = 0x00ffff; // Turkos
+  } else if (blockType === BlockType.CHEST) {
+    color = 0x8b5a2b; // Brun
+  } else if (blockType === BlockType.BED) {
+    color = 0x8b0000; // Röd
+  } else if (blockType === BlockType.TORCH) {
+    color = 0xffa500; // Orange
+  } else if (blockType === BlockType.LEAVES) {
+    color = 0x228b22; // Orange
+  } else if (blockType === BlockType.ICE) {
+    color = 0x40c4ff; // Blue
+  } else if (blockType === BlockType.ICE_ROCK) {
+    color = 0xa8d8ee; // Blue
+  } else if (blockType === BlockType.LAVA) {
+    color = 0xff0000; // Red
+  } else if (blockType === BlockType.LAVA_ROCK) {
+    color = 0xff0000; // Red
+  }
+
+  return color;
+}
+
+//
+export function getBlockTexturePath(blockType: BlockType): string {
+  switch (blockType) {
+    case BlockType.STONE:
+      return "./src/assets/blocks.png";
+    case BlockType.DIRT:
+      return "./src/assets/blocks.png"; // Skapa/lägg till vid behov
+    case BlockType.GRASS:
+      return "./src/assets/blocks.png";
+    case BlockType.WOOD:
+      return "./src/assets/blocks.png";
+    case BlockType.LEAVES:
+      return "./src/assets/blocks.png";
+    case BlockType.COAL:
+      return "./src/assets/blocks.png";
+    case BlockType.IRON_ORE:
+      return "./src/assets/blocks.png";
+    case BlockType.COPPER_ORE:
+      return "./src/assets/blocks.png";
+    case BlockType.SILVER_ORE:
+      return "./src/assets/blocks.png";
+    case BlockType.GOLD_ORE:
+      return "./src/assets/blocks.png";
+    case BlockType.DIAMOND:
+      return "./src/assets/blocks.png";
+    case BlockType.CHEST:
+      return "./src/assets/blocks.png";
+    case BlockType.BED:
+      return "./src/assets/blocks.png";
+    case BlockType.TORCH:
+      return "./src/assets/blocks.png";
+    default:
+      return "./src/assets/blocks.png";
+  }
+}
 
 export class SimplexNoise {
   private p: Uint8Array = new Uint8Array(256);
@@ -3863,12 +3867,12 @@ export class MainScene {
 
     // Spelare & Raket
     // Beräkna spawn-position för spelaren
-    const playerSpawn = this.planet.findSpawnPosition(0);
+    const playerSpawn = this.planet.findSpawnPosition(0, 1.5);
     this.player = new Player(this.app, this.world, this.planet, playerSpawn.x, playerSpawn.y);
     this.player.container.zIndex = 2;
     this.stageContainer.addChild(this.player.container);
 
-    const rocketSpawn = this.planet.findSpawnPosition(0.12);
+    const rocketSpawn = this.planet.findSpawnPosition(0.12, 4.5);
     this.rocket = new Rocket(this.world, this.planet, rocketSpawn.x, rocketSpawn.y);
     this.rocket.setPlayer(this.player);
     this.rocket.container.zIndex = 1;
@@ -4217,7 +4221,8 @@ export function updateHotbarWithResource(
     const newHotbar = [...currentHotbar];
 
     const info = RESOURCE_INFO[resourceType];
-    if (info && (info.isTool || info.isArmor)) {
+    // Ändra här så att endast isArmor blockeras från hotbaren, inte isTool
+    if (info && info.isArmor) {
         return { newHotbar, updated: false };
     }
 
@@ -4377,7 +4382,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         boots: null,
     },
 
-    hotbar: ["dirt", null, null, null],
+    hotbar: ["Diamond Pickaxe", "dirt", null, null],
     selectedHotbarIndex: 0,
     selectedResource: "dirt",
     isInventoryOpen: false,
@@ -4471,20 +4476,17 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     setSelectedHotbarIndex: (index) => {
         const state = get();
+        const item = state.hotbar[index];
+        const tool = ALL_TOOLS[item as ToolType] || null;
+
         set({
             selectedHotbarIndex: index,
-            selectedResource: state.hotbar[index],
+            selectedResource: tool ? null : item,
+            currentTool: tool,
         });
     },
 
     setHotbarSlot: (index, resource) => {
-        if (resource) {
-            const info = RESOURCE_INFO[resource];
-            if (info && (info.isTool || info.isArmor)) {
-                return;
-            }
-        }
-
         const state = get();
         const newHotbar = [...state.hotbar];
 
@@ -4496,9 +4498,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
 
         newHotbar[index] = resource;
+        const selectedItem = newHotbar[state.selectedHotbarIndex];
+        const tool = ALL_TOOLS[selectedItem as ToolType] || null;
+
         set({
             hotbar: newHotbar,
-            selectedResource: newHotbar[state.selectedHotbarIndex],
+            selectedResource: tool ? null : selectedItem,
+            currentTool: tool,
         });
     },
 
@@ -4625,10 +4631,10 @@ export const REQUIRED_TOOL_TYPE: Record<BlockType, ("pickaxe" | "axe" | "shovel"
     [BlockType.SILVER_ORE]: ["pickaxe"],
     [BlockType.GOLD_ORE]: ["pickaxe"],
     [BlockType.CACTUS]: ["axe", "sword"],
-    [BlockType.ICE]: ["axe", "sword"],
-    [BlockType.ICE_ROCK]: ["axe", "sword"],
-    [BlockType.LAVA]: ["axe", "sword"],
-    [BlockType.LAVA_ROCK]: ["axe", "sword"],
+    [BlockType.ICE]: ["axe", "pickaxe"],
+    [BlockType.ICE_ROCK]: ["axe", "pickaxe"],
+    [BlockType.LAVA]: ["pickaxe"],
+    [BlockType.LAVA_ROCK]: ["pickaxe"],
     [BlockType.DIAMOND]: ["pickaxe"],
     [BlockType.CHEST]: ["none"],
     [BlockType.BED]: ["none"],
@@ -4736,6 +4742,10 @@ export const RESOURCE_COLORS: Record<string, string> = {
     chest: "#8b4513",
     bed: "#ff0000",
     torch: "#ffcc00",
+    ice: "#40c4ff",
+    ice_rock: "#a8d8ee",
+    lava: "#ff0000",
+    lava_rock: "#ff0000",
 };
 
 export const RESOURCE_INFO: Record<string, ResourceDetails> = {
@@ -4873,15 +4883,16 @@ FIL: src\ui\Header.ts
 import { Hotbar } from "./Hotbar";
 import { InventoryModal } from "./InventoryModal";
 import { HealthBar } from "./HealthBar";
-import { ToolSlot } from "./ToolSlot";
 import { useGameStore } from "store";
+import { MenuModal } from "./MenuModal"; // <--- Importera
 
 export class Header extends HTMLElement {
     private hotbar!: Hotbar;
     private healthBar!: HealthBar;
-    private toolSlot!: ToolSlot;
     private inventoryModal!: InventoryModal;
     private invBtn!: HTMLButtonElement;
+    private menuBtn!: HTMLButtonElement; // <--- Ny knapp
+    private menuModal!: MenuModal; // <--- Referens till nya modalen
 
     connectedCallback() {
         this.id = "header-container";
@@ -4910,14 +4921,11 @@ export class Header extends HTMLElement {
             gap: "12px",
         });
 
-        this.toolSlot = document.createElement("tool-slot-ui") as ToolSlot;
-        topRow.appendChild(this.toolSlot);
-
         this.hotbar = document.createElement("hotbar-ui") as Hotbar;
         topRow.appendChild(this.hotbar);
 
         const menuContainer = document.createElement("div");
-        menuContainer.id = "menu-container";
+        menuContainer.id = "inventory-container";
         Object.assign(menuContainer.style, {
             position: "relative",
             right: "0px",
@@ -4930,7 +4938,8 @@ export class Header extends HTMLElement {
         Object.assign(this.invBtn.style, {
             width: "48px",
             height: "48px",
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            //backgroundColor: "rgba(0, 0, 0, 0.7)",
+            background: "url('./assets/inventory.png') no-repeat center center/cover",
             border: "2px solid #666",
             borderRadius: "6px",
             color: "#fff",
@@ -4945,7 +4954,7 @@ export class Header extends HTMLElement {
         });
 
         // Sätt initial ikon baserat på store-läget
-        this.invBtn.innerText = useGameStore.getState().isInventoryOpen ? "📂" : "🎒";
+        //this.invBtn.innerText = useGameStore.getState().isInventoryOpen ? "📂" : "🎒";
 
         this.invBtn.addEventListener("click", (e: MouseEvent) => {
             e.stopPropagation();
@@ -4961,7 +4970,35 @@ export class Header extends HTMLElement {
             }
         });
 
+        // --- NY MENYKNAPP ---
+        this.menuBtn = document.createElement("button");
+        Object.assign(this.menuBtn.style, {
+            width: "48px",
+            height: "48px",
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            border: "2px solid #666",
+            borderRadius: "6px",
+            color: "#fff",
+            fontWeight: "bold",
+            fontSize: "20px",
+            cursor: "pointer",
+            pointerEvents: "auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 0.15s ease",
+        });
+        this.menuBtn.innerText = "⚙️"; // Ikon för menyn/inställningar
+
+        this.menuBtn.addEventListener("click", (e: MouseEvent) => {
+            e.stopPropagation();
+            this.menuModal.toggle(); // <--- Öppna/stäng menyn
+        });
+
+        // --------------------
+
         menuContainer.appendChild(this.invBtn);
+        menuContainer.appendChild(this.menuBtn);
         topRow.appendChild(menuContainer);
         this.appendChild(topRow);
 
@@ -4982,12 +5019,15 @@ export class Header extends HTMLElement {
         this.inventoryModal = document.createElement("inventory-modal") as InventoryModal;
         this.inventoryModal.style.pointerEvents = "auto";
         this.appendChild(this.inventoryModal);
+
+        this.menuModal = document.createElement("menu-modal") as MenuModal;
+        this.menuModal.style.pointerEvents = "auto";
+        this.appendChild(this.menuModal);
     }
 
     public destroy(): void {
         this.hotbar.destroy();
         this.healthBar.destroy();
-        this.toolSlot.destroy();
         this.remove();
     }
 }
@@ -5095,8 +5135,9 @@ TYP: KÄLLKOD
 FIL: src\ui\Hotbar.ts
 ==================================================
 
-import { useGameStore } from "store";
+import { useGameStore, ALL_TOOLS } from "store";
 import { RESOURCE_COLORS } from "types";
+import { getToolIcon } from "./uiHelpers";
 
 export class Hotbar extends HTMLElement {
     private buttons: HTMLButtonElement[] = [];
@@ -5196,27 +5237,53 @@ export class Hotbar extends HTMLElement {
             }
 
             if (resource) {
-                const colorPreview = document.createElement("div");
-                Object.assign(colorPreview.style, {
-                    width: "24px",
-                    height: "24px",
-                    borderRadius: "4px",
-                    border: "1px solid rgba(0,0,0,0.4)",
-                    backgroundColor: RESOURCE_COLORS[resource] || "#ffffff",
-                });
+                const tool = ALL_TOOLS[resource as keyof typeof ALL_TOOLS];
 
-                const countText = document.createElement("span");
-                countText.innerText = String(state.inventory[resource] || 0);
-                Object.assign(countText.style, {
-                    position: "absolute",
-                    bottom: "3px",
-                    right: "5px",
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                });
+                if (tool) {
+                    // Om det är ett verktyg/vapen
+                    const iconEl = document.createElement("span");
+                    iconEl.innerText = getToolIcon(tool);
+                    Object.assign(iconEl.style, {
+                        fontSize: "16px",
+                        marginTop: "4px",
+                        pointerEvents: "none",
+                    });
 
-                button.appendChild(colorPreview);
-                button.appendChild(countText);
+                    const nameEl = document.createElement("span");
+                    nameEl.innerText = resource.split(" ")[0];
+                    Object.assign(nameEl.style, {
+                        fontSize: "9px",
+                        fontWeight: "bold",
+                        color: "#ffd700",
+                        pointerEvents: "none",
+                    });
+
+                    button.appendChild(iconEl);
+                    button.appendChild(nameEl);
+                } else {
+                    // Om det är ett vanligt block/resurs
+                    const colorPreview = document.createElement("div");
+                    Object.assign(colorPreview.style, {
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "4px",
+                        border: "1px solid rgba(0,0,0,0.4)",
+                        backgroundColor: RESOURCE_COLORS[resource] || "#ffffff",
+                    });
+
+                    const countText = document.createElement("span");
+                    countText.innerText = String(state.inventory[resource] || 0);
+                    Object.assign(countText.style, {
+                        position: "absolute",
+                        bottom: "3px",
+                        right: "5px",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                    });
+
+                    button.appendChild(colorPreview);
+                    button.appendChild(countText);
+                }
             }
         });
     }
@@ -5242,8 +5309,8 @@ export * from "./VirtualJoystick";
 export * from "./InventoryModal";
 export * from "./HealthBar";
 export * from "./Hotbar";
-export * from "./ToolSlot";
 export * from "./uiHelpers";
+export * from "./MenuModal"; // <--- Lägg till denna
 
 
 ==================================================
@@ -5493,16 +5560,7 @@ export class InventoryModal extends HTMLElement {
             const info = RESOURCE_INFO[key];
 
             // 1. Om detta är ett verktyg och det är utrustat som nuvarande verktyg -> Dölj från inventoryt
-            if (info && info.isTool) {
-                if (state.currentTool?.name === key) {
-                    return; // Lämnar platsen tom i inventory-gridet!
-                }
-                for (let i = 0; i < count; i++) {
-                    activeResources.push({ res: key, count: 1 });
-                }
-            }
-            // 2. Om detta är en rustning -> Lägg till i mönstret
-            else if (info && info.isArmor) {
+            if (info && info.isArmor) {
                 for (let i = 0; i < count; i++) {
                     activeResources.push({ res: key, count: 1 });
                 }
@@ -5637,40 +5695,32 @@ export class InventoryModal extends HTMLElement {
             slot.addEventListener("click", () => {
                 const store = useGameStore.getState();
 
-                if (info && info.isTool) {
-                    // Om verktyget redan är utrustat -> ta av det, annars utrusta det
-                    if (store.currentTool?.name === slotData.res) {
-                        store.equipTool(null);
-                    } else {
-                        store.equipTool(slotData.res);
-                    }
-                } else if (info && info.isArmor) {
+                if (info && info.isArmor) {
                     const armor = ALL_ARMOR[slotData.res];
                     if (armor) {
                         const currentlyEquipped = store.equipment[armor.slot];
-
                         store.removeResource(slotData.res, 1);
                         if (currentlyEquipped) {
                             store.addResource(currentlyEquipped.name, 1);
                         }
-
                         store.equipArmor(armor.slot, armor);
                     }
                 } else {
+                    // Hantera både verktyg och vanliga resurser på samma sätt för hotbar
                     const currentHotbar = store.hotbar;
-
                     const existingIndex = currentHotbar.indexOf(slotData.res);
+
                     if (existingIndex !== -1) {
                         store.setSelectedHotbarIndex(existingIndex);
                     } else {
                         const emptyIdx = currentHotbar.indexOf(null);
                         if (emptyIdx !== -1) {
                             store.setHotbarSlot(emptyIdx, slotData.res);
-                        } else {
-                            store.setHotbarSlot(store.selectedHotbarIndex, slotData.res);
                         }
                     }
                 }
+
+                this.render();
             });
         }
 
@@ -5695,7 +5745,7 @@ export class InventoryModal extends HTMLElement {
 
     private renderEquipmentSection(state: ReturnType<typeof useGameStore.getState>): void {
         const barLabel = document.createElement("p");
-        barLabel.innerText = "Snabbslots (Verktyg & Hotbar):";
+        barLabel.innerText = "Hotbar:";
         barLabel.style.fontSize = "12px";
         barLabel.style.color = "#aaa";
         this.container.appendChild(barLabel);
@@ -5713,87 +5763,10 @@ export class InventoryModal extends HTMLElement {
             width: "fit-content",
         });
 
-        bottomContainer.appendChild(this.renderToolModalSlot(state));
-
-        const divider = document.createElement("div");
-        Object.assign(divider.style, {
-            width: "2px",
-            height: "40px",
-            backgroundColor: "#333333",
-        });
-        bottomContainer.appendChild(divider);
-
+        // Vi sätter in hotbar-gridet direkt här istället för separat verktygsruta
         bottomContainer.appendChild(this.renderHotbarGrid(state));
 
         this.container.appendChild(bottomContainer);
-    }
-
-    private renderToolModalSlot(state: ReturnType<typeof useGameStore.getState>): HTMLDivElement {
-        const toolModalSlot = document.createElement("div");
-        Object.assign(toolModalSlot.style, {
-            width: "48px",
-            height: "48px",
-            border: state.currentTool ? "2px solid #ffd700" : "2px inset #333333",
-            borderRadius: "6px",
-            backgroundColor: "#1a1a1a",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: state.currentTool ? "pointer" : "default",
-            position: "relative",
-        });
-
-        if (state.currentTool) {
-            const toolIconBadge = document.createElement("span");
-            toolIconBadge.innerText = getToolIcon(state.currentTool);
-            Object.assign(toolIconBadge.style, {
-                position: "absolute",
-                top: "2px",
-                left: "4px",
-                fontSize: "10px",
-                pointerEvents: "none",
-            });
-            toolModalSlot.appendChild(toolIconBadge);
-
-            const toolName = document.createElement("span");
-            toolName.innerText = state.currentTool.name.split(" ")[0];
-            Object.assign(toolName.style, {
-                fontSize: "10px",
-                fontWeight: "bold",
-                color: "#ffd700",
-                marginTop: "4px",
-                pointerEvents: "none",
-            });
-
-            const toolPower = document.createElement("span");
-            toolPower.innerText = "⚡" + state.currentTool.power;
-            Object.assign(toolPower.style, {
-                position: "absolute",
-                bottom: "2px",
-                right: "4px",
-                fontSize: "10px",
-                color: "#ffffff",
-                pointerEvents: "none",
-            });
-
-            toolModalSlot.appendChild(toolName);
-            toolModalSlot.appendChild(toolPower);
-        }
-
-        toolModalSlot.addEventListener("click", () => {
-            if (state.currentTool) {
-                useGameStore.getState().equipTool(null);
-            }
-        });
-
-        this.setupDropTarget(toolModalSlot, (resource) => {
-            if (resource && ALL_TOOLS[resource as ToolType]) {
-                useGameStore.getState().equipTool(resource);
-            }
-        });
-
-        return toolModalSlot;
     }
 
     private renderHotbarGrid(state: ReturnType<typeof useGameStore.getState>): HTMLDivElement {
@@ -5808,10 +5781,11 @@ export class InventoryModal extends HTMLElement {
             Object.assign(slot.style, {
                 width: "48px",
                 height: "48px",
-                border: "2px inset #333333",
+                border: state.selectedHotbarIndex === index ? "2px solid #ffffff" : "2px inset #333333",
                 borderRadius: "6px",
-                backgroundColor: "#1a1a1a",
+                backgroundColor: state.selectedHotbarIndex === index ? "rgba(255, 255, 255, 0.2)" : "#1a1a1a",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: slotRes ? "grab" : "pointer",
@@ -5820,10 +5794,32 @@ export class InventoryModal extends HTMLElement {
 
             if (slotRes) {
                 slot.draggable = true;
-
+                const tool = ALL_TOOLS[slotRes as ToolType];
                 const info = RESOURCE_INFO[slotRes];
 
-                if (info && info.color) {
+                if (tool) {
+                    // Om det är ett verktyg eller vapen i hotbaren
+                    const iconEl = document.createElement("span");
+                    iconEl.innerText = getToolIcon(tool);
+                    Object.assign(iconEl.style, {
+                        fontSize: "14px",
+                        marginTop: "4px",
+                        pointerEvents: "none",
+                    });
+
+                    const nameEl = document.createElement("span");
+                    nameEl.innerText = slotRes.split(" ")[0];
+                    Object.assign(nameEl.style, {
+                        fontSize: "9px",
+                        fontWeight: "bold",
+                        color: "#ffd700",
+                        pointerEvents: "none",
+                    });
+
+                    slot.appendChild(iconEl);
+                    slot.appendChild(nameEl);
+                } else if (info && info.color) {
+                    // Vanligt block/resurs
                     const colorBox = document.createElement("div");
                     Object.assign(colorBox.style, {
                         width: "28px",
@@ -5859,12 +5855,10 @@ export class InventoryModal extends HTMLElement {
                 useGameStore.getState().setHotbarSlot(index, null);
             });
 
+            // Här tillåter vi att BÅDE verktyg och resurser läggs i hotbaren
             this.setupDropTarget(slot, (resource) => {
                 if (resource) {
-                    const info = RESOURCE_INFO[resource];
-                    if (!info?.isTool && !info?.isArmor) {
-                        useGameStore.getState().setHotbarSlot(index, resource);
-                    }
+                    useGameStore.getState().setHotbarSlot(index, resource);
                 }
             });
 
@@ -5918,6 +5912,140 @@ export class InventoryModal extends HTMLElement {
 
 if (!customElements.get("inventory-modal")) {
     customElements.define("inventory-modal", InventoryModal);
+}
+
+
+==================================================
+TYP: KÄLLKOD
+FIL: src\ui\MenuModal.ts
+==================================================
+
+export class MenuModal extends HTMLElement {
+    private container!: HTMLDivElement;
+    private isOpen: boolean = false;
+
+    connectedCallback() {
+        this.classList.add("fixed", "inset-0", "z-50", "hidden");
+
+        // Stäng modalen om man klickar på bakgrunden (backdrop)
+        this.addEventListener("click", (e: MouseEvent) => {
+            if (e.target === this) {
+                e.stopPropagation();
+                this.toggle();
+            }
+        });
+
+        this.container = document.createElement("div");
+        Object.assign(this.container.style, {
+            position: "fixed",
+            top: "104px",
+            left: "50%",
+            transform: "translate(-50%, 0)",
+            backgroundColor: "#222222",
+            border: "3px solid #444444",
+            borderRadius: "8px",
+            padding: "16px",
+            color: "#fff",
+            width: "300px", // Justera bredden efter behov för din meny
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.9)",
+            pointerEvents: "auto",
+            userSelect: "none",
+        });
+
+        this.container.addEventListener("click", (e: MouseEvent) => {
+            e.stopPropagation();
+        });
+
+        this.appendChild(this.container);
+        this.updateVisibility();
+        this.render();
+    }
+
+    public toggle(): void {
+        this.isOpen = !this.isOpen;
+        this.render();
+    }
+
+    private updateVisibility(): void {
+        if (this.isOpen) {
+            this.classList.remove("hidden");
+            this.style.display = "block";
+            this.style.pointerEvents = "auto";
+            this.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+        } else {
+            this.classList.add("hidden");
+            this.style.display = "none";
+            this.style.pointerEvents = "none";
+            this.style.backgroundColor = "transparent";
+        }
+    }
+
+    private render() {
+        this.updateVisibility();
+        if (!this.isOpen) return;
+
+        this.container.innerHTML = "";
+
+        // --- Header ---
+        const header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.justifyContent = "space-between";
+        header.style.alignItems = "center";
+
+        const title = document.createElement("h2");
+        title.innerText = "Meny";
+        title.style.fontWeight = "bold";
+        title.style.fontSize = "18px";
+
+        const closeBtn = document.createElement("button");
+        closeBtn.innerText = "✕";
+        closeBtn.style.cursor = "pointer";
+        closeBtn.style.background = "none";
+        closeBtn.style.border = "none";
+        closeBtn.style.color = "#aaa";
+        closeBtn.style.fontSize = "18px";
+        closeBtn.addEventListener("click", (e: MouseEvent) => {
+            e.stopPropagation();
+            this.toggle();
+        });
+
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+        this.container.appendChild(header);
+
+        // --- Innehåll i menyn ---
+        const contentBox = document.createElement("div");
+        Object.assign(contentBox.style, {
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+        });
+
+        // Exempel på en knapp i menyn
+        const sampleButton = document.createElement("button");
+        sampleButton.innerText = "Alternativ 1";
+        Object.assign(sampleButton.style, {
+            padding: "10px",
+            backgroundColor: "#333",
+            border: "1px solid #555",
+            borderRadius: "4px",
+            color: "#fff",
+            cursor: "pointer",
+        });
+        sampleButton.addEventListener("click", () => {
+            console.log("Alternativ 1 klickat");
+        });
+
+        contentBox.appendChild(sampleButton);
+        this.container.appendChild(contentBox);
+    }
+}
+
+if (!customElements.get("menu-modal")) {
+    customElements.define("menu-modal", MenuModal);
 }
 
 
@@ -6089,108 +6217,6 @@ export class MobileControls extends HTMLElement {
 
 if (!customElements.get("controls-ui")) {
     customElements.define("controls-ui", MobileControls);
-}
-
-
-==================================================
-TYP: KÄLLKOD
-FIL: src\ui\ToolSlot.ts
-==================================================
-
-import { useGameStore, ALL_TOOLS } from "store";
-import type { ToolType } from "types";
-import { renderSlotContent, getToolIcon } from "./uiHelpers";
-
-export class ToolSlot extends HTMLElement {
-    private button!: HTMLButtonElement;
-
-    connectedCallback(): void {
-        this.setupStyles();
-        this.createDomElements();
-        this.subscribeToStore();
-    }
-
-    private setupStyles(): void {
-        this.classList.add("relative", "inline-flex", "items-center", "z-10");
-        Object.assign(this.style, { userSelect: "none" });
-    }
-
-    private createDomElements(): void {
-        this.innerHTML = "";
-
-        this.button = document.createElement("button");
-        Object.assign(this.button.style, {
-            width: "48px",
-            height: "48px",
-            borderRadius: "6px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            position: "relative",
-            color: "#ffffff",
-            outline: "none",
-            border: "2px solid #444444",
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            pointerEvents: "auto",
-            cursor: "default",
-            transition: "all 0.1s ease",
-        });
-
-        this.button.addEventListener("dragover", (e: DragEvent) => {
-            e.preventDefault();
-            this.button.style.borderColor = "#ffffff";
-            this.button.style.backgroundColor = "rgba(255, 255, 255, 0.2)";
-        });
-
-        this.button.addEventListener("dragleave", () => {
-            this.updateUI();
-        });
-
-        this.button.addEventListener("drop", (e: DragEvent) => {
-            e.preventDefault();
-            const itemName = e.dataTransfer?.getData("text/plain");
-            if (itemName && ALL_TOOLS[itemName as ToolType]) {
-                useGameStore.getState().equipTool(itemName);
-            }
-        });
-
-        this.button.addEventListener("click", (event: MouseEvent) => {
-            event.stopPropagation();
-        });
-
-        this.appendChild(this.button);
-        this.updateUI();
-    }
-
-    private subscribeToStore(): void {
-        useGameStore.subscribe(() => {
-            this.updateUI();
-        });
-    }
-
-    private updateUI(): void {
-        const state = useGameStore.getState();
-
-        const hasTool = state.currentTool !== null;
-        this.button.style.border = hasTool ? "3px solid #ffffff" : "2px solid #444444";
-        this.button.style.backgroundColor = hasTool ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.6)";
-
-        renderSlotContent(this.button, {
-            itemKey: state.currentTool?.name,
-            isTool: true,
-            toolData: state.currentTool,
-            icon: getToolIcon(state.currentTool),
-        });
-    }
-
-    public destroy(): void {
-        this.remove();
-    }
-}
-
-if (!customElements.get("tool-slot-ui")) {
-    customElements.define("tool-slot-ui", ToolSlot);
 }
 
 

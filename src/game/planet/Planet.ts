@@ -4,7 +4,7 @@ import { BlockType, type BlockData, COLLIDER_GROUPS } from "types";
 import { DEFAULT_PLANET_CONFIG, type PlanetConfig } from "./planetConfig";
 import { PLANET_BIOMES, type PlanetType, type PlanetBiomeConfig } from "./planetConfig";
 
-import { SimplexNoise } from "./planetHelpers";
+import { SimplexNoise, getBlockColor, getBlockTexturePath } from "./planetHelpers";
 
 export interface ExtendedPlanetConfig extends PlanetConfig {
   planetType?: PlanetType;
@@ -44,33 +44,30 @@ export class Planet {
 
   // Lägg till denna metod i Planet-klassen (src/game/planet/Planet.ts)
 
-  public findSpawnPosition(angleOffset: number = 0): { x: number; y: number } {
+  public findSpawnPosition(angleOffset: number = 0, spawnDistanceMultiplier: number = 1.5): { x: number; y: number } {
     const radius = this.config.radius;
     const blockSize = this.config.blockSize;
     const mapSize = radius * 2;
 
-    // Utgå från toppen av planeten (-Math.PI / 2) plus eventuell offset
     const angle = -Math.PI / 2 + angleOffset;
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
 
     let surfaceBlockPos: { x: number; y: number } | null = null;
+    const surfaceType = this.biome.surfaceBlock;
 
-    // Sök utifrån och in för att hitta det yttersta GRÄSBLOCKET (ytan)
     for (let r = mapSize; r >= Math.floor(radius * 0.3); r--) {
       const checkX = Math.floor(this.center.x / blockSize + dirX * r);
       const checkY = Math.floor(this.center.y / blockSize + dirY * r);
       const key = checkX + "," + checkY;
 
       const block = this.blocks.get(key);
-      // Vi vill enbart hitta det riktiga ytorganet (t.ex. gräs), inte träd/löv/surface-objekt
-      if (block && block.type === BlockType.GRASS) {
+      if (block && block.type === surfaceType) {
         surfaceBlockPos = { x: checkX, y: checkY };
         break;
       }
     }
 
-    // Fallback till vanliga blocket om gräs mot förmodan saknas i biom-konfigen
     if (!surfaceBlockPos) {
       for (let r = mapSize; r >= Math.floor(radius * 0.3); r--) {
         const checkX = Math.floor(this.center.x / blockSize + dirX * r);
@@ -78,7 +75,13 @@ export class Planet {
         const key = checkX + "," + checkY;
 
         const block = this.blocks.get(key);
-        if (block && block.type !== BlockType.AIR && block.type !== BlockType.WOOD && block.type !== BlockType.LEAVES) {
+        if (
+          block &&
+          block.type !== BlockType.AIR &&
+          block.type !== BlockType.WOOD &&
+          block.type !== BlockType.LEAVES &&
+          block.type !== BlockType.CACTUS
+        ) {
           surfaceBlockPos = { x: checkX, y: checkY };
           break;
         }
@@ -89,18 +92,16 @@ export class Planet {
       const worldX = surfaceBlockPos.x * blockSize + blockSize / 2;
       const worldY = surfaceBlockPos.y * blockSize + blockSize / 2;
 
-      // Placera precis ovanför gräsblocket
-      const spawnDistance = blockSize * 1.5;
+      const spawnDistance = blockSize * spawnDistanceMultiplier;
       return {
         x: worldX + dirX * spawnDistance,
         y: worldY + dirY * spawnDistance,
       };
     }
 
-    // Absolut fallback
     return {
       x: this.center.x,
-      y: this.center.y - (radius * blockSize + 40),
+      y: this.center.y - (radius * blockSize + 60),
     };
   }
 
@@ -132,7 +133,7 @@ export class Planet {
         }
 
         const frameRect = this.getBlockTile(block.x, block.y, tileSize, snappedRotation, block.type);
-        const texturePath = this.getBlockTexturePath(block.type);
+        const texturePath = getBlockTexturePath(block.type);
 
         // Ladda (eller hämta från cache) och applicera rätt ram direkt
         Assets.load(texturePath)
@@ -392,6 +393,7 @@ export class Planet {
       snappedRotation = dy > 0 ? Math.PI : 0;
     }
 
+    /*
     // Skapa spriten direkt med en vit placeholder (eller färgtextur om du vill)
     const sprite = new Sprite(Texture.WHITE);
     sprite.anchor.set(0.5);
@@ -402,6 +404,20 @@ export class Planet {
     sprite.rotation = snappedRotation;
 
     this.container.addChild(sprite);
+    */
+
+    const graphics = new Graphics();
+
+    // Färger baserat på blocktyp
+    let color = getBlockColor(blockType);
+
+    graphics.rect(-blockSize / 2, -blockSize / 2, blockSize, blockSize);
+    graphics.fill({ color: color });
+    graphics.stroke({ width: 1, color: 0x000000, alpha: 0.2 });
+
+    graphics.x = worldX;
+    graphics.y = worldY;
+    this.container.addChild(graphics);
 
     this.blocks.set(key, {
       x,
@@ -409,7 +425,7 @@ export class Planet {
       type: blockType,
       hp: 1,
       maxHp: 1,
-      body: sprite,
+      body: graphics,
       colliderGroup: colliderGroup,
     });
 
@@ -424,11 +440,10 @@ export class Planet {
     const worldX = x * blockSize + blockSize / 2;
     const worldY = y * blockSize + blockSize / 2;
 
-    /*
     const graphics = new Graphics();
 
     // Färger baserat på blocktyp
-    let color = this.getBlockColor(blockType);
+    let color = getBlockColor(blockType);
 
     graphics.rect(-blockSize / 2, -blockSize / 2, blockSize, blockSize);
     graphics.fill({ color: color });
@@ -437,29 +452,6 @@ export class Planet {
     graphics.x = worldX;
     graphics.y = worldY;
     this.container.addChild(graphics);
-*/
-
-    const sprite = new Sprite(Texture.WHITE); // Sätt en placeholder-textur direkt
-    sprite.anchor.set(0.5);
-    sprite.width = blockSize;
-    sprite.height = blockSize;
-    sprite.x = worldX;
-    sprite.y = worldY;
-
-    const texturePath = this.getBlockTexturePath(blockType);
-
-    // Ladda texturen via PixiJS Assets
-    Assets.load(texturePath)
-      .then((texture) => {
-        texture.source.scaleMode = "nearest"; // För pixel-art stil
-        sprite.texture = texture;
-      })
-      .catch(() => {
-        // Fallback om texturen inte hittas
-        console.warn("Kunde inte ladda textur för blocktyp:", blockType);
-      });
-
-    this.container.addChild(sprite);
 
     this.blocks.set(key, {
       x,
@@ -467,7 +459,7 @@ export class Planet {
       type: blockType,
       hp: 1,
       maxHp: 1,
-      body: sprite,
+      body: graphics,
       colliderGroup: COLLIDER_GROUPS.CATEGORY_TERRAIN,
     });
 
@@ -564,45 +556,6 @@ export class Planet {
     }
   }
 
-  private getBlockColor(blockType: BlockType): number {
-    // Färger baserat på blocktyp
-    let color = 0x808080; // Standard sten (grå)
-    if (blockType === BlockType.CORE) {
-      color = 0xff4500; // Orange/Röd
-    } else if (blockType === BlockType.GRASS) {
-      color = 0x2e8b57; // Grön
-    } else if (blockType === BlockType.DIRT) {
-      color = 0x8b5a2b; // Brun
-    } else if (blockType === BlockType.STONE) {
-      color = 0x808080; // Grå
-    } else if (blockType === BlockType.WOOD) {
-      color = 0x5c4033; // Brun
-    } else if (blockType === BlockType.SAND) {
-      color = 0xf4a460; // Brunaktig
-    } else if (blockType === BlockType.COAL) {
-      color = 0x1a1a1a; // Svart
-    } else if (blockType === BlockType.IRON_ORE) {
-      color = 0x808080; // Grå (ojka i originalet)
-    } else if (blockType === BlockType.COPPER_ORE) {
-      color = 0xcd7f32; // Bronsfärg (ojka i originalet)
-    } else if (blockType === BlockType.SILVER_ORE) {
-      color = 0xc0c0c0; // Silverfärg
-    } else if (blockType === BlockType.GOLD_ORE) {
-      color = 0xffd700; // Guld
-    } else if (blockType === BlockType.DIAMOND) {
-      color = 0x00ffff; // Turkos
-    } else if (blockType === BlockType.CHEST) {
-      color = 0x8b5a2b; // Brun
-    } else if (blockType === BlockType.BED) {
-      color = 0x8b0000; // Röd
-    } else if (blockType === BlockType.TORCH) {
-      color = 0xffa500; // Orange
-    } else if (blockType === BlockType.LEAVES) {
-      color = 0x228b22; // Orange
-    }
-    return color;
-  }
-
   // Lägg till denna hjälpfunktion i Planet-klassen
   private getBlockTile(x: number, y: number, tileSize: number, snappedRotation: number, blockType: BlockType): Rectangle {
     const rotIndex = Math.round((snappedRotation % (Math.PI * 2)) / (Math.PI / 2) + 4) % 4;
@@ -629,42 +582,6 @@ export class Planet {
     }
 
     return new Rectangle(col * tileSize, row * tileSize, tileSize, tileSize);
-  }
-
-  //
-  private getBlockTexturePath(blockType: BlockType): string {
-    switch (blockType) {
-      case BlockType.STONE:
-        return "./src/assets/blocks.png";
-      case BlockType.DIRT:
-        return "./src/assets/blocks.png"; // Skapa/lägg till vid behov
-      case BlockType.GRASS:
-        return "./src/assets/blocks.png";
-      case BlockType.WOOD:
-        return "./src/assets/blocks.png";
-      case BlockType.LEAVES:
-        return "./src/assets/blocks.png";
-      case BlockType.COAL:
-        return "./src/assets/blocks.png";
-      case BlockType.IRON_ORE:
-        return "./src/assets/blocks.png";
-      case BlockType.COPPER_ORE:
-        return "./src/assets/blocks.png";
-      case BlockType.SILVER_ORE:
-        return "./src/assets/blocks.png";
-      case BlockType.GOLD_ORE:
-        return "./src/assets/blocks.png";
-      case BlockType.DIAMOND:
-        return "./src/assets/blocks.png";
-      case BlockType.CHEST:
-        return "./src/assets/blocks.png";
-      case BlockType.BED:
-        return "./src/assets/blocks.png";
-      case BlockType.TORCH:
-        return "./src/assets/blocks.png";
-      default:
-        return "./src/assets/blocks.png";
-    }
   }
 
   //

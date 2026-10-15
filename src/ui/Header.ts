@@ -1,15 +1,16 @@
 import { Hotbar } from "./Hotbar";
 import { InventoryModal } from "./InventoryModal";
 import { HealthBar } from "./HealthBar";
-import { ToolSlot } from "./ToolSlot";
 import { useGameStore } from "store";
+import { MenuModal } from "./MenuModal"; // <--- Importera
 
 export class Header extends HTMLElement {
     private hotbar!: Hotbar;
     private healthBar!: HealthBar;
-    private toolSlot!: ToolSlot;
     private inventoryModal!: InventoryModal;
     private invBtn!: HTMLButtonElement;
+    private menuBtn!: HTMLButtonElement; // <--- Ny knapp
+    private menuModal!: MenuModal; // <--- Referens till nya modalen
 
     connectedCallback() {
         this.id = "header-container";
@@ -38,14 +39,11 @@ export class Header extends HTMLElement {
             gap: "12px",
         });
 
-        this.toolSlot = document.createElement("tool-slot-ui") as ToolSlot;
-        topRow.appendChild(this.toolSlot);
-
         this.hotbar = document.createElement("hotbar-ui") as Hotbar;
         topRow.appendChild(this.hotbar);
 
         const menuContainer = document.createElement("div");
-        menuContainer.id = "menu-container";
+        menuContainer.id = "inventory-container";
         Object.assign(menuContainer.style, {
             position: "relative",
             right: "0px",
@@ -58,7 +56,9 @@ export class Header extends HTMLElement {
         Object.assign(this.invBtn.style, {
             width: "48px",
             height: "48px",
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            background: "url('./src/assets/inventory.png') no-repeat center center",
+            backgroundSize: "32px 32px",
+            backgroundColor: "rgba(0, 0, 0, 0.6)", // Återställer den mörka bakgrundsfärgen
             border: "2px solid #666",
             borderRadius: "6px",
             color: "#fff",
@@ -69,27 +69,67 @@ export class Header extends HTMLElement {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            transition: "all 0.15s ease",
+            transition: "all 50ms ease",
         });
 
         // Sätt initial ikon baserat på store-läget
-        this.invBtn.innerText = useGameStore.getState().isInventoryOpen ? "📂" : "🎒";
+        //this.invBtn.innerText = useGameStore.getState().isInventoryOpen ? "📂" : "🎒";
 
         this.invBtn.addEventListener("click", (e: MouseEvent) => {
             e.stopPropagation();
-            useGameStore.getState().toggleInventory();
+
+            this.invBtn.classList.add("scale-[80%]");
+            setTimeout(() => {
+                this.invBtn.classList.remove("scale-[80%]");
+                useGameStore.getState().toggleInventory();
+            }, 100);
         });
 
         // Uppdatera endast ikonen när isInventoryOpen ändras (ingen border-ändring)
         useGameStore.subscribe((state) => {
             if (state.isInventoryOpen) {
-                this.invBtn.innerText = "📂"; // Öppen väska/mapp
+                //this.invBtn.innerText = "📂"; // Öppen väska/mapp
             } else {
-                this.invBtn.innerText = "🎒"; // Stängd ryggsäck
+                //this.invBtn.innerText = "🎒"; // Stängd ryggsäck
             }
         });
 
+        // --- NY MENYKNAPP ---
+        this.menuBtn = document.createElement("button");
+        Object.assign(this.menuBtn.style, {
+            width: "48px",
+            height: "48px",
+            background: "url('./src/assets/menu.png') no-repeat center center",
+            backgroundSize: "32px 32px",
+            backgroundColor: "rgba(0, 0, 0, 0.6)", // Återställer den mörka bakgrundsfärgen
+            border: "2px solid #666",
+            borderRadius: "6px",
+            color: "#fff",
+            fontWeight: "bold",
+            fontSize: "20px",
+            cursor: "pointer",
+            pointerEvents: "auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 50ms ease",
+        });
+        //this.menuBtn.innerText = "⚙️"; // Ikon för menyn/inställningar
+
+        this.menuBtn.addEventListener("click", (e: MouseEvent) => {
+            e.stopPropagation();
+
+            this.menuBtn.classList.add("scale-[80%]");
+            setTimeout(() => {
+                this.menuBtn.classList.remove("scale-[80%]");
+                this.menuModal.toggle(); // <--- Öppna/stäng menyn
+            }, 100);
+        });
+
+        // --------------------
+
         menuContainer.appendChild(this.invBtn);
+        menuContainer.appendChild(this.menuBtn);
         topRow.appendChild(menuContainer);
         this.appendChild(topRow);
 
@@ -110,12 +150,15 @@ export class Header extends HTMLElement {
         this.inventoryModal = document.createElement("inventory-modal") as InventoryModal;
         this.inventoryModal.style.pointerEvents = "auto";
         this.appendChild(this.inventoryModal);
+
+        this.menuModal = document.createElement("menu-modal") as MenuModal;
+        this.menuModal.style.pointerEvents = "auto";
+        this.appendChild(this.menuModal);
     }
 
     public destroy(): void {
         this.hotbar.destroy();
         this.healthBar.destroy();
-        this.toolSlot.destroy();
         this.remove();
     }
 }

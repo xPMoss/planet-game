@@ -74,12 +74,12 @@ export class MainScene {
 
     // Spelare & Raket
     // Beräkna spawn-position för spelaren
-    const playerSpawn = this.planet.findSpawnPosition(0);
+    const playerSpawn = this.planet.findSpawnPosition(0, 1.5);
     this.player = new Player(this.app, this.world, this.planet, playerSpawn.x, playerSpawn.y);
     this.player.container.zIndex = 2;
     this.stageContainer.addChild(this.player.container);
 
-    const rocketSpawn = this.planet.findSpawnPosition(0.12);
+    const rocketSpawn = this.planet.findSpawnPosition(0.12, 4.5);
     this.rocket = new Rocket(this.world, this.planet, rocketSpawn.x, rocketSpawn.y);
     this.rocket.setPlayer(this.player);
     this.rocket.container.zIndex = 1;

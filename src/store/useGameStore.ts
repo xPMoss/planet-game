@@ -53,7 +53,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         boots: null,
     },
 
-    hotbar: ["dirt", null, null, null],
+    hotbar: ["Diamond Pickaxe", "dirt", null, null],
     selectedHotbarIndex: 0,
     selectedResource: "dirt",
     isInventoryOpen: false,
@@ -147,20 +147,17 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     setSelectedHotbarIndex: (index) => {
         const state = get();
+        const item = state.hotbar[index];
+        const tool = ALL_TOOLS[item as ToolType] || null;
+
         set({
             selectedHotbarIndex: index,
-            selectedResource: state.hotbar[index],
+            selectedResource: tool ? null : item,
+            currentTool: tool,
         });
     },
 
     setHotbarSlot: (index, resource) => {
-        if (resource) {
-            const info = RESOURCE_INFO[resource];
-            if (info && (info.isTool || info.isArmor)) {
-                return;
-            }
-        }
-
         const state = get();
         const newHotbar = [...state.hotbar];
 
@@ -172,9 +169,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
 
         newHotbar[index] = resource;
+        const selectedItem = newHotbar[state.selectedHotbarIndex];
+        const tool = ALL_TOOLS[selectedItem as ToolType] || null;
+
         set({
             hotbar: newHotbar,
-            selectedResource: newHotbar[state.selectedHotbarIndex],
+            selectedResource: tool ? null : selectedItem,
+            currentTool: tool,
         });
     },
 

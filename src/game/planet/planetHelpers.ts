@@ -1,5 +1,91 @@
+import { BlockType } from "types";
+
 export type { PlanetConfig } from "./planetConfig";
 export { DEFAULT_PLANET_CONFIG } from "./planetConfig";
+
+export function getBlockColor(blockType: BlockType): number {
+  // Färger baserat på blocktyp
+  let color = 0x808080; // Standard sten (grå)
+  if (blockType === BlockType.CORE) {
+    color = 0xff4500; // Orange/Röd
+  } else if (blockType === BlockType.GRASS) {
+    color = 0x2e8b57; // Grön
+  } else if (blockType === BlockType.DIRT) {
+    color = 0x8b5a2b; // Brun
+  } else if (blockType === BlockType.STONE) {
+    color = 0x808080; // Grå
+  } else if (blockType === BlockType.WOOD) {
+    color = 0x5c4033; // Brun
+  } else if (blockType === BlockType.SAND) {
+    color = 0xf4a460; // Brunaktig
+  } else if (blockType === BlockType.COAL) {
+    color = 0x1a1a1a; // Svart
+  } else if (blockType === BlockType.IRON_ORE) {
+    color = 0x808080; // Grå (ojka i originalet)
+  } else if (blockType === BlockType.COPPER_ORE) {
+    color = 0xcd7f32; // Bronsfärg (ojka i originalet)
+  } else if (blockType === BlockType.SILVER_ORE) {
+    color = 0xc0c0c0; // Silverfärg
+  } else if (blockType === BlockType.GOLD_ORE) {
+    color = 0xffd700; // Guld
+  } else if (blockType === BlockType.DIAMOND) {
+    color = 0x00ffff; // Turkos
+  } else if (blockType === BlockType.CHEST) {
+    color = 0x8b5a2b; // Brun
+  } else if (blockType === BlockType.BED) {
+    color = 0x8b0000; // Röd
+  } else if (blockType === BlockType.TORCH) {
+    color = 0xffa500; // Orange
+  } else if (blockType === BlockType.LEAVES) {
+    color = 0x228b22; // Orange
+  } else if (blockType === BlockType.ICE) {
+    color = 0x40c4ff; // Blue
+  } else if (blockType === BlockType.ICE_ROCK) {
+    color = 0xa8d8ee; // Blue
+  } else if (blockType === BlockType.LAVA) {
+    color = 0xff0000; // Red
+  } else if (blockType === BlockType.LAVA_ROCK) {
+    color = 0xff0000; // Red
+  }
+
+  return color;
+}
+
+//
+export function getBlockTexturePath(blockType: BlockType): string {
+  switch (blockType) {
+    case BlockType.STONE:
+      return "./src/assets/blocks.png";
+    case BlockType.DIRT:
+      return "./src/assets/blocks.png"; // Skapa/lägg till vid behov
+    case BlockType.GRASS:
+      return "./src/assets/blocks.png";
+    case BlockType.WOOD:
+      return "./src/assets/blocks.png";
+    case BlockType.LEAVES:
+      return "./src/assets/blocks.png";
+    case BlockType.COAL:
+      return "./src/assets/blocks.png";
+    case BlockType.IRON_ORE:
+      return "./src/assets/blocks.png";
+    case BlockType.COPPER_ORE:
+      return "./src/assets/blocks.png";
+    case BlockType.SILVER_ORE:
+      return "./src/assets/blocks.png";
+    case BlockType.GOLD_ORE:
+      return "./src/assets/blocks.png";
+    case BlockType.DIAMOND:
+      return "./src/assets/blocks.png";
+    case BlockType.CHEST:
+      return "./src/assets/blocks.png";
+    case BlockType.BED:
+      return "./src/assets/blocks.png";
+    case BlockType.TORCH:
+      return "./src/assets/blocks.png";
+    default:
+      return "./src/assets/blocks.png";
+  }
+}
 
 export class SimplexNoise {
   private p: Uint8Array = new Uint8Array(256);

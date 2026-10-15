@@ -1,5 +1,6 @@
-import { useGameStore } from "store";
+import { useGameStore, ALL_TOOLS } from "store";
 import { RESOURCE_COLORS } from "types";
+import { getToolIcon } from "./uiHelpers";
 
 export class Hotbar extends HTMLElement {
     private buttons: HTMLButtonElement[] = [];
@@ -33,10 +34,10 @@ export class Hotbar extends HTMLElement {
                 justifyContent: "center",
                 cursor: "pointer",
                 position: "relative",
-                color: "#ffffff",
+                color: "#fff",
                 outline: "none",
                 transition: "all 0.1s ease",
-                border: "2px solid #444444",
+                border: "2px solid #666",
                 backgroundColor: "rgba(0, 0, 0, 0.6)",
                 pointerEvents: "auto",
             });
@@ -91,7 +92,7 @@ export class Hotbar extends HTMLElement {
             const resource = state.hotbar[index];
             const isSelected = state.selectedHotbarIndex === index;
 
-            button.style.border = isSelected ? "3px solid #ffffff" : "2px solid #444444";
+            button.style.border = isSelected ? "2px solid #ffffff" : "2px solid #666";
             button.style.backgroundColor = isSelected ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.6)";
 
             while (button.children.length > 1) {
@@ -99,27 +100,53 @@ export class Hotbar extends HTMLElement {
             }
 
             if (resource) {
-                const colorPreview = document.createElement("div");
-                Object.assign(colorPreview.style, {
-                    width: "24px",
-                    height: "24px",
-                    borderRadius: "4px",
-                    border: "1px solid rgba(0,0,0,0.4)",
-                    backgroundColor: RESOURCE_COLORS[resource] || "#ffffff",
-                });
+                const tool = ALL_TOOLS[resource as keyof typeof ALL_TOOLS];
 
-                const countText = document.createElement("span");
-                countText.innerText = String(state.inventory[resource] || 0);
-                Object.assign(countText.style, {
-                    position: "absolute",
-                    bottom: "3px",
-                    right: "5px",
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                });
+                if (tool) {
+                    // Om det är ett verktyg/vapen
+                    const iconEl = document.createElement("span");
+                    iconEl.innerText = getToolIcon(tool);
+                    Object.assign(iconEl.style, {
+                        fontSize: "16px",
+                        marginTop: "4px",
+                        pointerEvents: "none",
+                    });
 
-                button.appendChild(colorPreview);
-                button.appendChild(countText);
+                    const nameEl = document.createElement("span");
+                    nameEl.innerText = resource.split(" ")[0];
+                    Object.assign(nameEl.style, {
+                        fontSize: "9px",
+                        fontWeight: "bold",
+                        color: "#ffd700",
+                        pointerEvents: "none",
+                    });
+
+                    button.appendChild(iconEl);
+                    button.appendChild(nameEl);
+                } else {
+                    // Om det är ett vanligt block/resurs
+                    const colorPreview = document.createElement("div");
+                    Object.assign(colorPreview.style, {
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "4px",
+                        border: "1px solid rgba(0,0,0,0.4)",
+                        backgroundColor: RESOURCE_COLORS[resource] || "#ffffff",
+                    });
+
+                    const countText = document.createElement("span");
+                    countText.innerText = String(state.inventory[resource] || 0);
+                    Object.assign(countText.style, {
+                        position: "absolute",
+                        bottom: "3px",
+                        right: "5px",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                    });
+
+                    button.appendChild(colorPreview);
+                    button.appendChild(countText);
+                }
             }
         });
     }

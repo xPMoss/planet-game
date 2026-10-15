@@ -28,6 +28,10 @@ export const RESOURCE_COLORS: Record<string, string> = {
     chest: "#8b4513",
     bed: "#ff0000",
     torch: "#ffcc00",
+    ice: "#40c4ff",
+    ice_rock: "#a8d8ee",
+    lava: "#ff0000",
+    lava_rock: "#ff0000",
 };
 
 export const RESOURCE_INFO: Record<string, ResourceDetails> = {

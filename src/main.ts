@@ -9,7 +9,7 @@ async function bootstrap() {
 
     //const debugScene = new DebugScene(gameEngine.app, gameEngine.world, gameEngine.stageContainer);
     const mainScene = new MainScene(gameEngine.app, gameEngine.world, gameEngine.stageContainer);
-    const spaceScene = new SpaceScene(gameEngine.app, gameEngine.world, gameEngine.stageContainer);
+    //const spaceScene = new SpaceScene(gameEngine.app, gameEngine.world, gameEngine.stageContainer);
     mainScene.start();
 }
 

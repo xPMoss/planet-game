@@ -4,5 +4,5 @@ export * from "./VirtualJoystick";
 export * from "./InventoryModal";
 export * from "./HealthBar";
 export * from "./Hotbar";
-export * from "./ToolSlot";
 export * from "./uiHelpers";
+export * from "./MenuModal"; // <--- Lägg till denna

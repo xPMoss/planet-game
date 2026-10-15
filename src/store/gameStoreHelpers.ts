@@ -39,7 +39,8 @@ export function updateHotbarWithResource(
     const newHotbar = [...currentHotbar];
 
     const info = RESOURCE_INFO[resourceType];
-    if (info && (info.isTool || info.isArmor)) {
+    // Ändra här så att endast isArmor blockeras från hotbaren, inte isTool
+    if (info && info.isArmor) {
         return { newHotbar, updated: false };
     }
 

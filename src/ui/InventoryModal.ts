@@ -240,16 +240,7 @@ export class InventoryModal extends HTMLElement {
             const info = RESOURCE_INFO[key];
 
             // 1. Om detta är ett verktyg och det är utrustat som nuvarande verktyg -> Dölj från inventoryt
-            if (info && info.isTool) {
-                if (state.currentTool?.name === key) {
-                    return; // Lämnar platsen tom i inventory-gridet!
-                }
-                for (let i = 0; i < count; i++) {
-                    activeResources.push({ res: key, count: 1 });
-                }
-            }
-            // 2. Om detta är en rustning -> Lägg till i mönstret
-            else if (info && info.isArmor) {
+            if (info && info.isArmor) {
                 for (let i = 0; i < count; i++) {
                     activeResources.push({ res: key, count: 1 });
                 }
@@ -384,40 +375,32 @@ export class InventoryModal extends HTMLElement {
             slot.addEventListener("click", () => {
                 const store = useGameStore.getState();
 
-                if (info && info.isTool) {
-                    // Om verktyget redan är utrustat -> ta av det, annars utrusta det
-                    if (store.currentTool?.name === slotData.res) {
-                        store.equipTool(null);
-                    } else {
-                        store.equipTool(slotData.res);
-                    }
-                } else if (info && info.isArmor) {
+                if (info && info.isArmor) {
                     const armor = ALL_ARMOR[slotData.res];
                     if (armor) {
                         const currentlyEquipped = store.equipment[armor.slot];
-
                         store.removeResource(slotData.res, 1);
                         if (currentlyEquipped) {
                             store.addResource(currentlyEquipped.name, 1);
                         }
-
                         store.equipArmor(armor.slot, armor);
                     }
                 } else {
+                    // Hantera både verktyg och vanliga resurser på samma sätt för hotbar
                     const currentHotbar = store.hotbar;
-
                     const existingIndex = currentHotbar.indexOf(slotData.res);
+
                     if (existingIndex !== -1) {
                         store.setSelectedHotbarIndex(existingIndex);
                     } else {
                         const emptyIdx = currentHotbar.indexOf(null);
                         if (emptyIdx !== -1) {
                             store.setHotbarSlot(emptyIdx, slotData.res);
-                        } else {
-                            store.setHotbarSlot(store.selectedHotbarIndex, slotData.res);
                         }
                     }
                 }
+
+                this.render();
             });
         }
 
@@ -442,7 +425,7 @@ export class InventoryModal extends HTMLElement {
 
     private renderEquipmentSection(state: ReturnType<typeof useGameStore.getState>): void {
         const barLabel = document.createElement("p");
-        barLabel.innerText = "Snabbslots (Verktyg & Hotbar):";
+        barLabel.innerText = "Hotbar:";
         barLabel.style.fontSize = "12px";
         barLabel.style.color = "#aaa";
         this.container.appendChild(barLabel);
@@ -460,87 +443,10 @@ export class InventoryModal extends HTMLElement {
             width: "fit-content",
         });
 
-        bottomContainer.appendChild(this.renderToolModalSlot(state));
-
-        const divider = document.createElement("div");
-        Object.assign(divider.style, {
-            width: "2px",
-            height: "40px",
-            backgroundColor: "#333333",
-        });
-        bottomContainer.appendChild(divider);
-
+        // Vi sätter in hotbar-gridet direkt här istället för separat verktygsruta
         bottomContainer.appendChild(this.renderHotbarGrid(state));
 
         this.container.appendChild(bottomContainer);
-    }
-
-    private renderToolModalSlot(state: ReturnType<typeof useGameStore.getState>): HTMLDivElement {
-        const toolModalSlot = document.createElement("div");
-        Object.assign(toolModalSlot.style, {
-            width: "48px",
-            height: "48px",
-            border: state.currentTool ? "2px solid #ffd700" : "2px inset #333333",
-            borderRadius: "6px",
-            backgroundColor: "#1a1a1a",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: state.currentTool ? "pointer" : "default",
-            position: "relative",
-        });
-
-        if (state.currentTool) {
-            const toolIconBadge = document.createElement("span");
-            toolIconBadge.innerText = getToolIcon(state.currentTool);
-            Object.assign(toolIconBadge.style, {
-                position: "absolute",
-                top: "2px",
-                left: "4px",
-                fontSize: "10px",
-                pointerEvents: "none",
-            });
-            toolModalSlot.appendChild(toolIconBadge);
-
-            const toolName = document.createElement("span");
-            toolName.innerText = state.currentTool.name.split(" ")[0];
-            Object.assign(toolName.style, {
-                fontSize: "10px",
-                fontWeight: "bold",
-                color: "#ffd700",
-                marginTop: "4px",
-                pointerEvents: "none",
-            });
-
-            const toolPower = document.createElement("span");
-            toolPower.innerText = "⚡" + state.currentTool.power;
-            Object.assign(toolPower.style, {
-                position: "absolute",
-                bottom: "2px",
-                right: "4px",
-                fontSize: "10px",
-                color: "#ffffff",
-                pointerEvents: "none",
-            });
-
-            toolModalSlot.appendChild(toolName);
-            toolModalSlot.appendChild(toolPower);
-        }
-
-        toolModalSlot.addEventListener("click", () => {
-            if (state.currentTool) {
-                useGameStore.getState().equipTool(null);
-            }
-        });
-
-        this.setupDropTarget(toolModalSlot, (resource) => {
-            if (resource && ALL_TOOLS[resource as ToolType]) {
-                useGameStore.getState().equipTool(resource);
-            }
-        });
-
-        return toolModalSlot;
     }
 
     private renderHotbarGrid(state: ReturnType<typeof useGameStore.getState>): HTMLDivElement {
@@ -555,10 +461,11 @@ export class InventoryModal extends HTMLElement {
             Object.assign(slot.style, {
                 width: "48px",
                 height: "48px",
-                border: "2px inset #333333",
+                border: state.selectedHotbarIndex === index ? "2px solid #ffffff" : "2px inset #333333",
                 borderRadius: "6px",
-                backgroundColor: "#1a1a1a",
+                backgroundColor: state.selectedHotbarIndex === index ? "rgba(255, 255, 255, 0.2)" : "#1a1a1a",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: slotRes ? "grab" : "pointer",
@@ -567,10 +474,32 @@ export class InventoryModal extends HTMLElement {
 
             if (slotRes) {
                 slot.draggable = true;
-
+                const tool = ALL_TOOLS[slotRes as ToolType];
                 const info = RESOURCE_INFO[slotRes];
 
-                if (info && info.color) {
+                if (tool) {
+                    // Om det är ett verktyg eller vapen i hotbaren
+                    const iconEl = document.createElement("span");
+                    iconEl.innerText = getToolIcon(tool);
+                    Object.assign(iconEl.style, {
+                        fontSize: "14px",
+                        marginTop: "4px",
+                        pointerEvents: "none",
+                    });
+
+                    const nameEl = document.createElement("span");
+                    nameEl.innerText = slotRes.split(" ")[0];
+                    Object.assign(nameEl.style, {
+                        fontSize: "9px",
+                        fontWeight: "bold",
+                        color: "#ffd700",
+                        pointerEvents: "none",
+                    });
+
+                    slot.appendChild(iconEl);
+                    slot.appendChild(nameEl);
+                } else if (info && info.color) {
+                    // Vanligt block/resurs
                     const colorBox = document.createElement("div");
                     Object.assign(colorBox.style, {
                         width: "28px",
@@ -606,12 +535,10 @@ export class InventoryModal extends HTMLElement {
                 useGameStore.getState().setHotbarSlot(index, null);
             });
 
+            // Här tillåter vi att BÅDE verktyg och resurser läggs i hotbaren
             this.setupDropTarget(slot, (resource) => {
                 if (resource) {
-                    const info = RESOURCE_INFO[resource];
-                    if (!info?.isTool && !info?.isArmor) {
-                        useGameStore.getState().setHotbarSlot(index, resource);
-                    }
+                    useGameStore.getState().setHotbarSlot(index, resource);
                 }
             });
 
