@@ -1,312 +1,225 @@
-import Phaser from "phaser";
-import { Planet, CATEGORY_TERRAIN } from "planet";
-import type { Player } from "../player/Player";
-import type { CameraController } from "../camera/Camera";
+import { Container, Graphics } from "pixi.js";
+import RAPIER, { Vector2, type Vector } from "@dimforge/rapier2d-compat";
+import { Planet } from "../planet/Planet";
+import { Player } from "../player/Player";
+import { COLLIDER_GROUPS } from "types";
 import { createRocketTexture } from "./rocketHelpers";
-import type { MobileInputState } from "ui";
-
-export const CATEGORY_ROCKET = 0x0008;
 
 export class Rocket {
-  private scene: Phaser.Scene;
-  private planet: Planet;
-  public sprite!: Phaser.Physics.Matter.Sprite;
-
+  public container: Container;
+  public flameGraphics: Graphics;
+  public body: RAPIER.RigidBody;
   public isBoarded: boolean = false;
+
+  private world: RAPIER.World;
+  private planet: Planet;
   private player?: Player;
-  private cameraController?: CameraController;
 
-  private promptText!: Phaser.GameObjects.Text;
-  private flameGraphics!: Phaser.GameObjects.Graphics;
+  private thrustPower: number = 100;
 
-  private eKey?: Phaser.Input.Keyboard.Key;
-  private wKey?: Phaser.Input.Keyboard.Key;
-  private aKey?: Phaser.Input.Keyboard.Key;
-  private sKey?: Phaser.Input.Keyboard.Key;
-  private dKey?: Phaser.Input.Keyboard.Key;
+  private interactionKeyCooldown: boolean = false;
 
-  private thrustPower: number = 0.003;
-
-  constructor(scene: Phaser.Scene, planet: Planet) {
-    this.scene = scene;
+  constructor(world: RAPIER.World, planet: Planet, spawnX: number, spawnY: number) {
+    this.world = world;
     this.planet = planet;
 
-    if (scene.input.keyboard) {
-      this.eKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-      this.wKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-      this.aKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-      this.sKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-      this.dKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-    }
+    this.container = new Container();
+
+    // PixiJS grafik för raketen
+    const graphics = createRocketTexture();
+    this.container.addChild(graphics);
+
+    this.flameGraphics = new Graphics();
+    this.container.addChild(this.flameGraphics);
+
+    // Rapier RigidBody & Collider
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(spawnX, spawnY).setLinearDamping(0.2).setAngularDamping(1.0);
+
+    this.body = this.world.createRigidBody(bodyDesc);
+
+    const width = 128;
+    const height = 72;
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(width / 2, height / 2)
+      .setFriction(0.8)
+      .setRestitution(0.0);
+
+    colliderDesc.setCollisionGroups((COLLIDER_GROUPS.CATEGORY_PLAYER << 16) | COLLIDER_GROUPS.CATEGORY_TERRAIN);
+    this.world.createCollider(colliderDesc, this.body);
   }
 
-  public setPlayerAndCamera(player: Player, cameraController: CameraController): void {
+  public setPlayer(player: Player): void {
     this.player = player;
-    this.cameraController = cameraController;
   }
 
-  public spawn(): void {
-    if (!this.scene.textures.exists("rocket_tile")) {
-      createRocketTexture(this.scene, "rocket_tile");
-    }
+  public update(keys: Record<string, boolean>): void {
+    const pos: Vector = this.body.translation();
 
-    const radius = this.planet.config.radius;
-    const mapSize = radius * 2;
-    const blockSize = this.planet.config.blockSize;
+    // Hantera påstigning / avstigning med "KeyF"
+    if (keys["KeyF"] && !this.interactionKeyCooldown && this.player) {
+      // --- KONTROLLERA ATT SPELAREN ÄR INOM RAKETENS HITBOX ---
+      const playerPos = this.player.body.translation();
+      const distance = Math.hypot(playerPos.x - pos.x, playerPos.y - pos.y);
 
-    // Hitta en bra plats att spawna på
-    // Måste vara minst 10 block från mitten (där spelaren spawnar)
-    // Måste ha minst 2 block bred platt yta av DIRT (typ 0) utan träd eller stenar ovanpå
-    let bestGridX = Math.floor(radius);
-    let bestGridY = 0;
+      // 32 pixlar motsvarar ungefär raketens halva bredd/höjd (hitbox-storlek)
+      const maxBoardingDistance = 35;
 
-    for (let x = Math.floor(radius) + 10; x < mapSize - 2; x++) {
-      let y1 = -1;
-      let y2 = -1;
-      let type1 = -1;
-      let type2 = -1;
+      if (distance <= maxBoardingDistance || this.isBoarded) {
+        this.interactionKeyCooldown = true;
+        this.isBoarded = !this.isBoarded;
 
-      // Hitta översta blocket för x
-      for (let y = 0; y < mapSize; y++) {
-        const block = this.planet.blocks.get(x + "," + y);
-        if (block) {
-          y1 = y;
-          type1 = block.type;
-          break;
+        if (this.isBoarded) {
+          this.player.container.visible = false;
+          this.player.body.setTranslation(pos, true);
+        } else {
+          this.player.container.visible = true;
+          this.player.body.setTranslation({ x: pos.x, y: pos.y }, true);
         }
-      }
 
-      // Hitta översta blocket för x + 1
-      for (let y = 0; y < mapSize; y++) {
-        const block = this.planet.blocks.get(x + 1 + "," + y);
-        if (block) {
-          y2 = y;
-          type2 = block.type;
-          break;
-        }
-      }
-
-      // Kolla om ytan är platt och består av rent gräs/smuts (DIRT = 0)
-      if (y1 !== -1 && y1 === y2 && type1 === 0 && type2 === 0) {
-        bestGridX = x;
-        bestGridY = y1;
-        break; // Hittade en perfekt landningsplats!
+        setTimeout(() => {
+          this.interactionKeyCooldown = false;
+        }, 300);
       }
     }
 
-    const rocketWidth = 128;
-    const rocketHeight = 72;
+    // --------------------------------------------------------
+    const { dirX, dirY, tangentX, tangentY, rawAngle, isWithinGravity, distToCenter } = this.calculateDirections();
+    this.applyGravity(dirX, dirY, rawAngle, pos);
 
-    // Centrera raketen mellan de två platta blocken
-    const spawnX = bestGridX * blockSize + blockSize;
-    const spawnY = bestGridY * blockSize - rocketHeight / 2 - 15;
+    if (this.isBoarded) {
+      this.updateMovingRocket(keys, dirX, dirY, tangentX, tangentY, pos);
+    } else {
+      //this.updateStaticRocket();
+    }
 
-    // Dynamisk sprit från start så att massa och fysik beräknas korrekt utan NaN
-    this.sprite = this.scene.matter.add.sprite(spawnX, spawnY, "rocket_tile", undefined, {
-      friction: 0.8,
-      frictionStatic: 1.0,
-      frictionAir: 0.02,
-      density: 0.05,
-      restitution: 0,
-    });
-
-    this.sprite.setCollisionCategory(CATEGORY_ROCKET);
-    this.sprite.setCollidesWith([CATEGORY_TERRAIN]);
-    this.sprite.setFixedRotation();
-
-    this.sprite.setDisplaySize(rocketWidth, rocketHeight);
-    this.sprite.setData("isRocket", true);
-    this.sprite.setDepth(5);
-
-    // Prompt för att hoppa in i raketen
-    this.promptText = this.scene.add.text(spawnX, spawnY - 65, "[E] Gå in i raketen", {
-      fontFamily: "sans-serif",
-      fontSize: "14px",
-      color: "#ffffff",
-      backgroundColor: "#000000aa",
-      padding: { x: 8, y: 4 },
-    });
-    this.promptText.setOrigin(0.5);
-    this.promptText.setDepth(100);
-    this.promptText.setVisible(false);
-
-    this.promptText.setInteractive({ useHandCursor: true });
-    this.promptText.on("pointerdown", () => {
-      if (!this.isBoarded) {
-        this.boardRocket();
-      } else {
-        this.exitRocket();
-      }
-    });
-
-    // Flamma grafik
-    this.flameGraphics = this.scene.add.graphics();
-    this.flameGraphics.setDepth(4);
+    // Synka PixiJS Container
+    this.container.x = pos.x;
+    this.container.y = pos.y;
+    this.container.rotation = this.body.rotation();
   }
 
-  public update(
-    cursors?: Phaser.Types.Input.Keyboard.CursorKeys,
-    mobileState?: MobileInputState,
-    joystickState?: { up: boolean; down: boolean; left: boolean; right: boolean },
-  ): void {
-    if (!this.sprite || !this.sprite.active || isNaN(this.sprite.x) || isNaN(this.sprite.y)) return;
+  private calculateDirections(): {
+    dirX: number;
+    dirY: number;
+    tangentX: number;
+    tangentY: number;
+    rawAngle: number;
+    isWithinGravity: boolean;
+    distToCenter: number;
+  } {
+    const pos: Vector = this.body.translation();
+    const planetCenter: Vector = this.planet.center;
+    const distX: number = planetCenter.x - pos.x;
+    const distY: number = planetCenter.y - pos.y;
+    const distToCenter: number = Math.hypot(distX, distY);
 
-    const playerSprite = this.player?.sprite;
+    const dx: number = pos.x - planetCenter.x;
+    const dy: number = pos.y - planetCenter.y;
+    const absX: number = Math.abs(dx);
+    const absY: number = Math.abs(dy);
 
-    // Gravitation mot planetens centrum (gäller alltid för raketen)
+    let dirX: number = 0;
+    let dirY: number = 0;
+    let rawAngle: number = 0;
+    let tangentX: number = 0;
+    let tangentY: number = 0;
+
+    if (absX > absY) {
+      dirX = dx > 0 ? -1 : 1;
+      dirY = 0;
+      rawAngle = dx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      tangentX = 0;
+      tangentY = dx > 0 ? 1 : -1;
+    } else {
+      dirX = 0;
+      dirY = dy > 0 ? -1 : 1;
+      rawAngle = dy > 0 ? Math.PI : 0;
+      tangentX = dy > 0 ? -1 : 1;
+      tangentY = 0;
+    }
+
+    const isWithinGravity = distToCenter > 0 && distToCenter <= this.planet.config.radius * 2 * this.planet.config.blockSize;
+
+    return { dirX, dirY, tangentX, tangentY, rawAngle, isWithinGravity, distToCenter };
+  }
+
+  private applyGravity(dirX: number, dirY: number, rawAngle: number, pos: Vector) {
+    const gravity = this.planet.getGravityAt(pos.x, pos.y);
+
+    const mass = this.body.mass();
+    this.body.resetForces(true);
+    this.body.addForce(
+      {
+        x: dirX * gravity.force * mass,
+        y: dirY * gravity.force * mass,
+      },
+      true,
+    );
+    this.body.setRotation(rawAngle, true);
+  }
+
+  updateMovingRocket(keys: Record<string, boolean>, dirX: number, dirY: number, tangentX: number, tangentY: number, pos: Vector) {
+    // Styr raketen med A/D eller Vänster/Höger pil
+    if (keys["KeyA"] || keys["ArrowLeft"]) {
+      this.body.setRotation(this.body.rotation() - 0.05, true);
+    }
+    if (keys["KeyD"] || keys["ArrowRight"]) {
+      this.body.setRotation(this.body.rotation() + 0.05, true);
+    }
+
+    this.flameGraphics.clear();
+
+    // Gasa med W eller Uppåt-pil
+    if (keys["KeyW"] || keys["ArrowUp"]) {
+      this.drawFlame();
+
+      const currentVel = this.body.linvel();
+
+      //console.log("currentVel", currentVel);
+      let radialVel = currentVel.x * dirX + currentVel.y * dirY;
+      let tangentVel = currentVel.x * tangentX + currentVel.y * tangentY;
+      radialVel = -this.thrustPower;
+
+      const pushOut = -1;
+      const currentPos = this.body.translation();
+      this.body.setTranslation(
+        {
+          x: currentPos.x + dirX * pushOut,
+          y: currentPos.y + dirY * pushOut,
+        },
+        true,
+      );
+
+      this.body.setLinvel(
+        {
+          x: tangentX * tangentVel + dirX * radialVel,
+          y: tangentY * tangentVel + dirY * radialVel,
+        },
+        true,
+      );
+    }
+
+    if (this.player) {
+      this.player.body.setTranslation(pos, true);
+      this.player.body.setLinvel({ x: 0, y: 0 }, true);
+    }
+  }
+
+  updateStaticRocket() {
+    const pos = this.body.translation();
     const planetCenter = this.planet.center;
-    const dx = planetCenter.x - this.sprite.x;
-    const dy = planetCenter.y - this.sprite.y;
+    const dx = planetCenter.x - pos.x;
+    const dy = planetCenter.y - pos.y;
     const distToCenter = Math.hypot(dx, dy);
 
-    if (distToCenter > 0) {
-      const body = this.sprite.body as MatterJS.BodyType;
-      if (body) {
-        const gravityMag = 0.001 * body.mass;
-        const gravityForce = new Phaser.Math.Vector2((dx / distToCenter) * gravityMag, (dy / distToCenter) * gravityMag);
-        this.sprite.applyForce(gravityForce);
-      }
-    }
-
-    // Om spelaren inte är i raketen: Kolla avstånd för prompt
-    if (!this.isBoarded && playerSprite) {
-      const dist = Phaser.Math.Distance.Between(playerSprite.x, playerSprite.y, this.sprite.x, this.sprite.y);
-
-      if (dist < 80) {
-        const angleRad = Phaser.Math.DegToRad(this.sprite.angle - 90);
-        this.promptText.setPosition(this.sprite.x + Math.cos(angleRad) * 65, this.sprite.y + Math.sin(angleRad) * 65);
-        this.promptText.setRotation(this.sprite.rotation);
-        this.promptText.setText("[E] Gå in i raketen");
-        this.promptText.setVisible(true);
-
-        if (this.eKey && Phaser.Input.Keyboard.JustDown(this.eKey)) {
-          this.boardRocket();
-        }
-      } else {
-        this.promptText.setVisible(false);
-      }
-
-      this.flameGraphics.clear();
-      return;
-    }
-
-    // Om spelaren är i raketen:
-    if (this.isBoarded) {
-      if (playerSprite && playerSprite.body) {
-        this.scene.matter.body.setPosition(playerSprite.body as MatterJS.BodyType, {
-          x: this.sprite.x,
-          y: this.sprite.y,
-        });
-      }
-
-      const body = this.sprite.body as MatterJS.BodyType;
-      const speed = body ? body.speed : 0;
-      const isLanded = speed < 0.5;
-
-      if (isLanded) {
-        const angleRad = Phaser.Math.DegToRad(this.sprite.angle - 90);
-        this.promptText.setPosition(this.sprite.x + Math.cos(angleRad) * 75, this.sprite.y + Math.sin(angleRad) * 75);
-        this.promptText.setRotation(this.sprite.rotation);
-        this.promptText.setText("[E] Lämna raketen");
-        this.promptText.setVisible(true);
-
-        // Kolla om spelaren vill lämna raketen
-        if (this.eKey && Phaser.Input.Keyboard.JustDown(this.eKey)) {
-          this.exitRocket();
-          return;
-        }
-      } else {
-        this.promptText.setVisible(false);
-      }
-
-      // Flygkontroller
-      const isThrusting =
-        Boolean(this.wKey?.isDown) || Boolean(cursors?.up?.isDown) || Boolean(mobileState?.up) || Boolean(joystickState?.up);
-      const isRotatingLeft =
-        Boolean(this.aKey?.isDown) || Boolean(cursors?.left?.isDown) || Boolean(mobileState?.left) || Boolean(joystickState?.left);
-      const isRotatingRight =
-        Boolean(this.dKey?.isDown) || Boolean(cursors?.right?.isDown) || Boolean(mobileState?.right) || Boolean(joystickState?.right);
-      const isBraking =
-        Boolean(this.sKey?.isDown) || Boolean(cursors?.down?.isDown) || Boolean(mobileState?.down) || Boolean(joystickState?.down);
-
-      // Rotation (endast tillåten när raketen har lättat från marken)
-      if (!isLanded) {
-        if (isRotatingLeft) {
-          this.sprite.setAngle(this.sprite.angle - 2.5);
-        }
-        if (isRotatingRight) {
-          this.sprite.setAngle(this.sprite.angle + 2.5);
-        }
-      }
-
-      // Drivkraft (Thrust)
-      this.flameGraphics.clear();
-      if (isThrusting) {
-        const body = this.sprite.body as MatterJS.BodyType;
-        if (body) {
-          const angleRad = Phaser.Math.DegToRad(this.sprite.angle - 90);
-          const forceMag = this.thrustPower * body.mass;
-          const thrustX = Math.cos(angleRad) * forceMag;
-          const thrustY = Math.sin(angleRad) * forceMag;
-
-          this.sprite.applyForce(new Phaser.Math.Vector2(thrustX, thrustY));
-
-          // Rita motorflamma vid utblåset
-          this.drawEngineFlame();
-        }
-      }
-
-      if (isBraking) {
-        const body = this.sprite.body as MatterJS.BodyType;
-        if (body) {
-          this.scene.matter.body.setVelocity(body, {
-            x: body.velocity.x * 0.95,
-            y: body.velocity.y * 0.95,
-          });
-        }
-      }
-    }
+    const mass = this.body.mass();
+    const gravityMag = 800 * mass;
+    this.body.resetForces(true);
+    this.body.addForce({ x: (dx / distToCenter) * gravityMag, y: (dy / distToCenter) * gravityMag }, true);
   }
 
-  private boardRocket(): void {
-    if (!this.player) return;
-    this.isBoarded = true;
-    this.player.setBoarded(true);
-
-    // Sätt kameran att följa raketen och zooma ut mjukt
-    if (this.cameraController) {
-      this.cameraController.follow(this.sprite, 0.8);
-    }
-  }
-
-  private exitRocket(): void {
-    if (!this.player) return;
-    this.isBoarded = false;
-
-    // Placera spelaren bredvid raketen
-    const exitX = this.sprite.x + 40;
-    const exitY = this.sprite.y;
-
-    this.player.setBoarded(false, { x: exitX, y: exitY });
-
-    // Återställ kameran att följa spelaren och zooma in till normalnivå
-    if (this.cameraController && this.player.sprite) {
-      this.cameraController.follow(this.player.sprite, 2.0);
-    }
-
-    this.promptText.setVisible(false);
-    this.flameGraphics.clear();
-  }
-
-  private drawEngineFlame(): void {
-    const angleRad = Phaser.Math.DegToRad(this.sprite.angle - 90);
-    const bottomX = this.sprite.x - Math.cos(angleRad) * 45;
-    const bottomY = this.sprite.y - Math.sin(angleRad) * 45;
-
-    this.flameGraphics.fillStyle(0xff6600, 0.9);
-    this.flameGraphics.fillCircle(bottomX + (Math.random() * 6 - 3), bottomY + (Math.random() * 6 - 3), 10 + Math.random() * 8);
-
-    this.flameGraphics.fillStyle(0xffff00, 1);
-    this.flameGraphics.fillCircle(bottomX, bottomY, 5 + Math.random() * 4);
+  private drawFlame(): void {
+    this.flameGraphics.circle(0, 36, 8);
+    this.flameGraphics.fill(0xff6600);
+    this.flameGraphics.zIndex = -1;
   }
 }

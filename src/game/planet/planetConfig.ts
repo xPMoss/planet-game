@@ -11,11 +11,12 @@ export interface PlanetBiomeConfig {
     decorations?: BlockType[];
     ores: { type: BlockType; chance: number }[];
     colors: Record<string, number>; // Färger för texturgenerering
+    textures?: Record<BlockType, string>; // Nytt: Mappning till texture keys
 }
 
 export const PLANET_BIOMES: Record<PlanetType, PlanetBiomeConfig> = {
     EARTH: {
-        surfaceBlock: BlockType.DIRT,
+        surfaceBlock: BlockType.GRASS,
         subSurfaceBlock: BlockType.DIRT,
         deepBlock: BlockType.STONE,
         coreBlock: BlockType.CORE,
@@ -32,8 +33,8 @@ export const PLANET_BIOMES: Record<PlanetType, PlanetBiomeConfig> = {
         },
     },
     ICE: {
-        surfaceBlock: BlockType.SAND, // Kan återanvändas som 'Snö/Is' eller lägg till ny BlockType
-        subSurfaceBlock: BlockType.STONE,
+        surfaceBlock: BlockType.ICE,
+        subSurfaceBlock: BlockType.ICE_ROCK,
         deepBlock: BlockType.STONE,
         coreBlock: BlockType.CORE,
         ores: [
@@ -47,8 +48,8 @@ export const PLANET_BIOMES: Record<PlanetType, PlanetBiomeConfig> = {
         },
     },
     VOLCANO: {
-        surfaceBlock: BlockType.STONE,
-        subSurfaceBlock: BlockType.STONE,
+        surfaceBlock: BlockType.LAVA_ROCK,
+        subSurfaceBlock: BlockType.LAVA,
         deepBlock: BlockType.STONE,
         coreBlock: BlockType.CORE,
         ores: [
@@ -62,9 +63,10 @@ export const PLANET_BIOMES: Record<PlanetType, PlanetBiomeConfig> = {
     },
     DESERT: {
         surfaceBlock: BlockType.SAND,
-        subSurfaceBlock: BlockType.SAND,
+        subSurfaceBlock: BlockType.SAND_ROCK,
         deepBlock: BlockType.STONE,
         coreBlock: BlockType.CORE,
+        decorations: [BlockType.CACTUS],
         ores: [
             { type: BlockType.GOLD_ORE, chance: 0.03 },
             { type: BlockType.COPPER_ORE, chance: 0.05 },
@@ -76,10 +78,12 @@ export const PLANET_BIOMES: Record<PlanetType, PlanetBiomeConfig> = {
         },
     },
 };
+
 export interface PlanetConfig {
     radius: number;
     blockSize: number;
     gravityStrength: number;
+    maxGravityDistance?: number;
     outlineDepth?: number;
     padding?: number;
     caveScaleFactor?: number;
@@ -94,7 +98,8 @@ export interface PlanetConfig {
 export const DEFAULT_PLANET_CONFIG: PlanetConfig = {
     radius: 20,
     blockSize: 16,
-    gravityStrength: 1,
+    gravityStrength: 1000,
+    maxGravityDistance: 3,
     outlineDepth: 10,
     padding: 0.5,
     caveScaleFactor: 8.0,
@@ -105,13 +110,14 @@ export const DEFAULT_PLANET_CONFIG: PlanetConfig = {
     coreRadiusRatio: 0.15,
     blockHp: {
         [BlockType.CORE]: 100,
+        [BlockType.GRASS]: 1,
+        [BlockType.DIRT]: 1,
         [BlockType.STONE]: 3,
         [BlockType.COAL]: 2,
         [BlockType.IRON_ORE]: 5,
         [BlockType.GOLD_ORE]: 8,
         [BlockType.DIAMOND]: 15,
         [BlockType.WOOD]: 2,
-        [BlockType.DIRT]: 1,
         [BlockType.CHEST]: 2,
         [BlockType.BED]: 1,
         [BlockType.TORCH]: 1,

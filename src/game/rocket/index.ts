@@ -1,2 +1,2 @@
-export { Rocket } from "./Rocket";
-export { createRocketTexture } from "./rocketHelpers";
+export * from "./Rocket";
+export * from "./rocketHelpers";

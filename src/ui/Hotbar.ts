@@ -1,5 +1,5 @@
 import { useGameStore } from "store";
-import { RESOURCE_COLORS } from "ui";
+import { RESOURCE_COLORS } from "types";
 
 export class Hotbar extends HTMLElement {
     private buttons: HTMLButtonElement[] = [];

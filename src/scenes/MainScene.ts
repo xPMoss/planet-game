@@ -1,151 +1,220 @@
-import Phaser from "phaser";
-import { Planet, DEFAULT_PLANET_CONFIG } from "planet";
+import { Application, Container, Graphics } from "pixi.js";
+import RAPIER from "@dimforge/rapier2d-compat";
+import { Planet, type PlanetConfig, type PlanetType } from "planet";
 import { Player } from "player";
-import { Rocket } from "../game/rocket";
-import { CameraController } from "camera";
-import { MiningManager, HighlightManager, BuildingManager, CombatManager } from "managers";
-//import { VirtualJoystick } from "phaser-virtual-joystick";
+import { Rocket } from "rocket";
+import { CameraController } from "../game/camera/Camera";
 import { Starfield } from "../game/background/Starfield";
-import { HouseManager } from "house";
-
+import { HouseManager } from "../game/house/HouseManager";
+import { MiningManager } from "../game/managers/MiningManager";
+import { BuildingManager } from "../game/managers/BuildingManager";
+import { CombatManager } from "../game/managers/CombatManager";
+import { HighlightManager } from "../game/managers/HighlightManager";
+import { PlanetChunkManager } from "../game/planet/PlanetChunkManager";
 import { Header, MobileControls, VirtualJoystick } from "ui";
-import { useGameStore } from "store";
+import { Atmosphere } from "../game/background/Atmosphere";
+import { SpaceScene } from "./SpaceScene";
 
-export class MainScene extends Phaser.Scene {
+export class MainScene {
+  private app: Application;
+  private world: RAPIER.World;
+  private stageContainer: Container;
+
+  private starfield!: Starfield;
+  private atmosphere!: Atmosphere;
   private planet!: Planet;
+  private planetType!: PlanetType;
+  private chunkManager!: PlanetChunkManager;
   private player!: Player;
   private rocket!: Rocket;
-  private starfield!: Starfield;
   private cameraController!: CameraController;
-  private combatManager!: CombatManager;
-  private highlightManager!: HighlightManager;
+
+  private houseManager!: HouseManager;
   private miningManager!: MiningManager;
   private buildingManager!: BuildingManager;
-  public houseManager!: HouseManager;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private combatManager!: CombatManager;
+  private highlightManager!: HighlightManager;
 
-  mobileControls!: MobileControls;
-  virtualJoystick!: VirtualJoystick;
-  header!: Header;
+  private keys: Record<string, boolean> = {};
 
-  constructor() {
-    super({ key: "MainScene" });
+  public mobileControls!: MobileControls;
+  public virtualJoystick!: VirtualJoystick;
+  public header!: Header;
+
+  private debugContainer!: Container; // <-- Byt till en container
+
+  constructor(app: Application, world: RAPIER.World, stageContainer: Container, planetType?: PlanetType) {
+    this.app = app;
+    this.world = world;
+    this.stageContainer = stageContainer;
+    this.planetType = planetType ?? ("EARTH" as PlanetType);
+
+    this.setupInput();
+
+    this.debugContainer = new Container();
+    this.debugContainer.zIndex = 9999;
+    this.stageContainer.addChild(this.debugContainer);
   }
 
-  preload(): void {
-    this.planet = new Planet(this, {
-      ...DEFAULT_PLANET_CONFIG,
-      planetType: "EARTH", // Try "ICE", "DESERT", or "EARTH"
-    });
-    this.planet.createTextures();
-  }
-
-  create(): void {
-    // Stäng av den globala gravitationen i Matter-världen
-    this.matter.world.setGravity(0, 0);
-
-    //
+  public start(): void {
+    // Generera planet
+    this.planet = new Planet(this.app, this.world, { planetType: this.planetType });
     this.planet.generate();
 
-    this.starfield = new Starfield(this, this.planet, 350);
+    // Bakgrund
+    this.starfield = new Starfield(this.planet);
+    this.stageContainer.addChild(this.starfield.container);
 
-    this.player = new Player(this, this.planet);
-    this.player.spawn();
+    // Skapa och lägg till atmosfären
+    this.atmosphere = new Atmosphere(this.planet);
+    this.stageContainer.addChild(this.atmosphere.container);
 
-    this.rocket = new Rocket(this, this.planet);
-    this.rocket.spawn();
+    // Lägg till planetens grafik
+    this.stageContainer.addChild(this.planet.container);
 
-    this.cameraController = new CameraController(this, this.planet, this.player);
-    this.cameraController.follow(this.player.sprite);
+    // Spelare & Raket
+    // Beräkna spawn-position för spelaren
+    const playerSpawn = this.planet.findSpawnPosition(0);
+    this.player = new Player(this.app, this.world, this.planet, playerSpawn.x, playerSpawn.y);
+    this.player.container.zIndex = 2;
+    this.stageContainer.addChild(this.player.container);
 
-    this.rocket.setPlayerAndCamera(this.player, this.cameraController);
+    const rocketSpawn = this.planet.findSpawnPosition(0.12);
+    this.rocket = new Rocket(this.world, this.planet, rocketSpawn.x, rocketSpawn.y);
+    this.rocket.setPlayer(this.player);
+    this.rocket.container.zIndex = 1;
+    this.stageContainer.addChild(this.rocket.container);
 
-    // Initiera Highlight Manager först och skicka med den till Mining och Building
+    this.chunkManager = new PlanetChunkManager(this.world, this.planet, this.player, this.rocket);
 
-    this.houseManager = new HouseManager(this, this.planet, this.player);
-    this.combatManager = new CombatManager(this, this.player);
+    // 4. Kamera
+    this.cameraController = new CameraController(this.stageContainer, this.player, this.planet, this.app);
+    this.cameraController.setRocketTarget(this.rocket);
 
-    this.highlightManager = new HighlightManager(this, this.planet, this.player);
-    this.miningManager = new MiningManager(this, this.planet, this.player, this.highlightManager);
-    this.buildingManager = new BuildingManager(this, this.planet, this.player, this.highlightManager, this.houseManager);
+    // 5. System & Managers
+    this.houseManager = new HouseManager(this.app, this.world, this.planet, this.player);
+    this.stageContainer.addChild(this.houseManager.guideGraphics);
 
-    // Keyboard input
-    if (this.input.keyboard) {
-      this.cursors = this.input.keyboard.createCursorKeys();
-    }
+    this.highlightManager = new HighlightManager(this.planet, this.player);
+    this.stageContainer.addChild(this.highlightManager.graphics);
 
-    // UI
-    this.virtualJoystick = document.createElement("virtual-joystick") as VirtualJoystick;
-    document.body.appendChild(this.virtualJoystick);
+    this.miningManager = new MiningManager(this.world, this.planet, this.player, this.highlightManager);
+    this.buildingManager = new BuildingManager(this.world, this.planet, this.player, this.highlightManager, this.houseManager);
+    this.combatManager = new CombatManager(this.world, this.player, this.stageContainer);
 
     this.mobileControls = document.createElement("controls-ui") as MobileControls;
-    document.body.prepend(this.mobileControls);
+    if (!document.querySelector("controls-ui")) {
+      document.body.prepend(this.mobileControls);
+    }
+
+    this.virtualJoystick = document.createElement("virtual-joystick") as VirtualJoystick;
+    if (!document.querySelector("virtual-joystick")) {
+      document.body.prepend(this.virtualJoystick);
+    }
+
     this.header = document.createElement("header-ui") as Header;
-    document.body.prepend(this.header);
+    if (!document.querySelector("header-ui")) {
+      document.body.prepend(this.header);
+    }
 
-    // Event-lyssnare
-    this.events.on("planet-cleared", () => {
-      alert("Hela planeten är utgrävd förutom kärnan!");
-
-      // Starta nästa bana, ge poäng eller visa en Vinst-UI
-    });
-
-    //
-    this.createDebug();
-
-    console.log("MainScene.create()", this);
+    // Starta Spelloopen (PixiJS Ticker)
+    this.app.ticker.add(this.update, this);
   }
 
-  override update(): void {
-    if (!this.player || !this.highlightManager || !this.miningManager || !this.buildingManager) return;
+  private setupInput(): void {
+    window.addEventListener("keydown", (e) => {
+      this.keys[e.code] = true;
+    });
+    window.addEventListener("keyup", (e) => {
+      this.keys[e.code] = false;
+    });
+  }
 
-    this.starfield?.update();
+  private update(ticker: any): void {
+    const dt = ticker.deltaTime / 60;
+    const time = performance.now();
 
-    this.player.update(this.cursors, this.mobileControls?.state, this.virtualJoystick.state);
-    this.rocket?.update(this.cursors, this.mobileControls?.state, this.virtualJoystick?.state);
+    // 1. Stega Rapier-fysikvärlden
+    this.world.step();
+
+    // 2. Uppdatera bakgrund och visningselement
+    this.starfield.update(time);
+
+    // 3. Uppdatera entiteter
+    this.player.update(dt, this.keys, this.virtualJoystick?.state, this.mobileControls?.state);
+    this.rocket.update(this.keys);
+
+    this.chunkManager.update();
+
+    // 4. Uppdatera spelhanterare
+    this.highlightManager.update();
+    this.miningManager.update(this.keys, this.mobileControls?.state);
+    this.buildingManager.update(this.keys, this.mobileControls?.state);
+    this.combatManager.update(this.keys, this.mobileControls?.state);
+    this.houseManager.update();
+
+    // 5. Kameraföljning
     this.cameraController.update();
 
-    // Uppdatera markören samt båda managers med mobiltillståndet
-    this.highlightManager.update();
+    this.checkSpaceTransition();
 
-    if (this.mobileControls?.state.primaryAction) {
-      const currentTool = useGameStore.getState().currentTool;
-      if (currentTool?.type === "sword") {
-        this.combatManager.attack();
-      } else {
-        this.miningManager.mineInFront();
-      }
-    }
-
-    this.buildingManager.update(this.mobileControls.state);
-    this.houseManager.update();
+    this.drawDebug();
   }
 
-  private createDebug() {
-    this.matter.world.drawDebug = true;
-    if (this.matter.world.debugGraphic) {
-      this.matter.world.debugGraphic.setDepth(999);
+  private checkSpaceTransition(): void {
+    if (!this.rocket || !this.rocket.isBoarded) return;
+
+    const rocketPos = this.rocket.container;
+    const planetCenter = this.planet.center;
+    const dist = Math.hypot(planetCenter.x - rocketPos.x, planetCenter.y - rocketPos.y);
+
+    // Beräkna planetens gräns i pixlar (t.ex. radie * blockSize + 300 pixlar marginal)
+    const planetRadiusPx = this.planet.config.radius * this.planet.config.blockSize;
+    const spaceTransitionLimit = planetRadiusPx + 400;
+
+    if (dist > spaceTransitionLimit) {
+      // Stäng ner MainScene och starta SpaceScene
+      this.destroy();
+      const spaceScene = new SpaceScene(this.app, this.world, this.stageContainer);
+      spaceScene.start();
     }
+  }
 
-    //this.matter.world.debugGraphic.clear();
-    const debugConfig = this.matter.world.debugConfig as unknown as {
-      showBody: boolean;
-      showStaticBody: boolean;
-      showVelocity: boolean;
-      fillColor?: number;
-      fillOpacity?: number;
-      lineColor?: number;
-      lineOpacity?: number;
-    };
+  public destroy(): void {
+    this.app.ticker.remove(this.update, this);
+    this.stageContainer.removeChildren();
+    this.chunkManager.destroy();
+    if (this.mobileControls) this.mobileControls.remove();
+    if (this.virtualJoystick) this.virtualJoystick.remove();
+    if (this.header) this.header.remove();
+  }
 
-    debugConfig.showBody = false;
-    debugConfig.showStaticBody = false;
-    debugConfig.showVelocity = false;
+  drawDebug(): void {
+    this.debugContainer.removeChildren(); // Rensa gamla rutor
 
-    // Sätt tydliga färger och opacitet för spelaren
-    debugConfig.fillColor = 0x00ff00; // Grön fyllning
-    debugConfig.fillOpacity = 0.5; // Halvgenomskinlig
-    debugConfig.lineColor = 0xffff00; // Gul linje runt spelaren
-    debugConfig.lineOpacity = 1.0;
+    this.world.forEachCollider((collider) => {
+      const translation = collider.translation();
+      const shape = collider.shape;
+
+      const g = new Graphics();
+      g.x = translation.x;
+      g.y = translation.y;
+      g.rotation = collider.rotation();
+
+      if (shape.type === RAPIER.ShapeType.Cuboid) {
+        const extents = (shape as RAPIER.Cuboid).halfExtents;
+        g.rect(-extents.x, -extents.y, extents.x * 2, extents.y * 2);
+        g.stroke({ width: 1, color: 0xff00ff, alpha: 0.8 }); // Lila för block/terräng
+      } else if (shape.type === RAPIER.ShapeType.Capsule) {
+        const radius = (shape as RAPIER.Capsule).radius;
+        const halfHeight = (shape as RAPIER.Capsule).halfHeight;
+
+        // Rita kapseln (eller en rektangel + cirklar för en finare kapsel-visuell)
+        g.rect(-radius, -halfHeight - radius, radius * 2, halfHeight * 2 + radius * 2);
+        g.stroke({ width: 1, color: 0x00ffff, alpha: 0.8 }); // Cyan för spelaren
+      }
+
+      this.debugContainer.addChild(g);
+    });
   }
 }

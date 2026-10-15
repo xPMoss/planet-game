@@ -1,23 +1,22 @@
-import Phaser from "phaser";
+import { Container, Graphics } from "pixi.js";
+import RAPIER from "@dimforge/rapier2d-compat";
 import type { Planet } from "./Planet";
-import { PlanetOptimizer } from "./planetOptimizer";
-import { BlockType } from "types";
-
-export const CATEGORY_PLAYER = 0x0001;
-export const CATEGORY_TERRAIN = 0x0002;
-export const CATEGORY_LOOT = 0x0004;
+import { BlockType, COLLIDER_GROUPS } from "types";
+import { mergeBlockGrid } from "./planetOptimizer";
 
 export class PlanetOutline {
-    private scene: Phaser.Scene;
+    private world: RAPIER.World;
+    private app: any;
     private planet: Planet;
-    public outlineGraphics?: Phaser.GameObjects.Graphics;
-    public outlineBodies: MatterJS.BodyType[] = [];
-    private optimizer: PlanetOptimizer;
+    public outlineGraphics?: Graphics;
+    public outlineBodies: RAPIER.RigidBody[] = [];
+    public container: Container;
 
-    constructor(scene: Phaser.Scene, planet: Planet) {
-        this.scene = scene;
+    constructor(app: any, world: RAPIER.World, planet: Planet) {
+        this.app = app;
+        this.world = world;
         this.planet = planet;
-        this.optimizer = new PlanetOptimizer(scene, planet);
+        this.container = new Container();
     }
 
     public draw(depth?: number): void {
@@ -26,72 +25,51 @@ export class PlanetOutline {
         if (this.outlineGraphics) {
             this.outlineGraphics.clear();
         } else {
-            this.outlineGraphics = this.scene.add.graphics();
-            this.outlineGraphics.setDepth(targetDepth);
+            this.outlineGraphics = new Graphics();
+            this.outlineGraphics.zIndex = targetDepth;
+            this.container.addChild(this.outlineGraphics);
         }
+    }
+
+    public drawOutline(depth?: number): void {
+        this.draw(depth);
 
         this.outlineBodies.forEach((body) => {
-            this.scene.matter.world.remove(body);
+            this.world.removeRigidBody(body);
         });
         this.outlineBodies = [];
 
-        const coreBlockKeys = new Set<string>();
         const mainBlockKeys = new Set<string>();
 
         this.planet.blocks.forEach((block, key) => {
-            if (block.type === BlockType.CORE) {
-                coreBlockKeys.add(key);
-            } else {
+            if (block.type !== BlockType.AIR) {
                 mainBlockKeys.add(key);
             }
         });
 
-        if (mainBlockKeys.size > 0) {
-            const planetBody = this.createCompoundFromKeys(mainBlockKeys);
-            if (planetBody) {
-                this.outlineBodies.push(planetBody);
-            }
-        }
+        if (mainBlockKeys.size === 0) return;
 
-        if (coreBlockKeys.size > 0) {
-            const coreBody = this.createCompoundFromKeys(coreBlockKeys);
-            if (coreBody) {
-                this.outlineBodies.push(coreBody);
-            }
-        }
-    }
-    private createCompoundFromKeys(keys: Set<string>): MatterJS.BodyType | undefined {
-        const rectBodies = this.optimizer.createCombinedBodies(keys);
+        const mergedRects = mergeBlockGrid(mainBlockKeys);
+        const blockSize = this.planet.config.blockSize;
+        const padding = this.planet.config.padding ?? 0.5;
 
-        if (rectBodies.length === 0) return undefined;
+        mergedRects.forEach((rect) => {
+            const widthPx = rect.width * blockSize;
+            const heightPx = rect.height * blockSize;
+            const worldX = rect.x * blockSize + widthPx / 2;
+            const worldY = rect.y * blockSize + heightPx / 2;
 
-        rectBodies.forEach((body) => {
-            body.collisionFilter.category = CATEGORY_TERRAIN;
+            const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(worldX, worldY);
+            const body = this.world.createRigidBody(bodyDesc);
+
+            const colliderDesc = RAPIER.ColliderDesc.cuboid((widthPx + padding) / 2, (heightPx + padding) / 2)
+                .setFriction(0.8)
+                .setRestitution(0.0);
+
+            colliderDesc.setCollisionGroups((COLLIDER_GROUPS.CATEGORY_TERRAIN << 16) | 0xffff);
+            this.world.createCollider(colliderDesc, body);
+
+            this.outlineBodies.push(body);
         });
-
-        if (rectBodies.length === 1) {
-            return rectBodies[0];
-        }
-
-        rectBodies.forEach((body) => {
-            this.scene.matter.world.remove(body);
-        });
-
-        const compoundBody = this.scene.matter.body.create({
-            parts: rectBodies,
-            isStatic: true,
-            friction: 0.8, // Ändrat från 0 till 0.8
-            frictionStatic: 1.0, // Ändrat från 0 till 1.0
-            restitution: 0,
-            slop: 0,
-            collisionFilter: {
-                category: CATEGORY_TERRAIN,
-                mask: 0xffffffff,
-                group: 0,
-            },
-        });
-
-        this.scene.matter.world.add(compoundBody);
-        return compoundBody;
     }
 }

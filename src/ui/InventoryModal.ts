@@ -2,7 +2,7 @@
 
 import { useGameStore, ALL_TOOLS, ALL_ARMOR } from "store";
 import type { ToolType, EquipmentSlot } from "types";
-import { RESOURCE_INFO } from "ui";
+import { RESOURCE_INFO } from "types";
 import { getToolIcon } from "./uiHelpers";
 
 interface DragPayload {

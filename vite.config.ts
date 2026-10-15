@@ -7,6 +7,12 @@ export default defineConfig({
     build: {
         outDir: "docs",
         emptyOutDir: true,
+        target: "esnext", // Tillåter Top-Level Await utan extra plugins
+    },
+    optimizeDeps: {
+        esbuildOptions: {
+            target: "esnext",
+        },
     },
     server: {
         host: true,

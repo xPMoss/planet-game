@@ -1,11 +1,8 @@
-// src/store/useGameStore.ts
-
 import { create } from "zustand";
 import { ALL_TOOLS, ALL_ARMOR, MAX_INVENTORY_SLOTS, type GameState } from "./gameStoreTypes";
-import { findToolByName, calculateTotalItems, updateHotbarWithResource } from "./gameStoreHelpers";
-import { RESOURCE_INFO } from "ui";
-
-export { ALL_TOOLS, ALL_ARMOR, MAX_INVENTORY_SLOTS };
+import { calculateTotalItems, updateHotbarWithResource } from "./gameStoreHelpers";
+import { RESOURCE_INFO } from "../types/ResourceTypes";
+import type { ToolType } from "../types";
 
 export const useGameStore = create<GameState>((set, get) => ({
     hp: 100,
@@ -20,7 +17,6 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     inventory: {
         "Iron Sword": 1,
-        // Startverktyg
         "Wood Pickaxe": 1,
         "Iron Pickaxe": 1,
         "Diamond Pickaxe": 1,
@@ -28,13 +24,12 @@ export const useGameStore = create<GameState>((set, get) => ({
         "Iron Axe": 1,
         "Wood Shovel": 1,
 
-        // Rustning
         "Red Hat": 1,
         "Iron Helmet": 1,
         "Leather Clothes": 1,
         "Speed Boots": 1,
-        wood: 0,
-        dirt: 0,
+        wood: 32,
+        dirt: 32,
         stone: 0,
         coal: 0,
         iron_ore: 0,
@@ -50,13 +45,18 @@ export const useGameStore = create<GameState>((set, get) => ({
         core: 0,
     },
     maxSlots: MAX_INVENTORY_SLOTS,
-    currentTool: ALL_TOOLS["Iron Pickaxe"],
+    currentTool: ALL_TOOLS["Diamond Pickaxe"],
 
     equipment: {
         helmet: ALL_ARMOR["Red Hat"],
         armor: null,
         boots: null,
     },
+
+    hotbar: ["dirt", null, null, null],
+    selectedHotbarIndex: 0,
+    selectedResource: "dirt",
+    isInventoryOpen: false,
 
     equipArmor: (slot, item) =>
         set((state) => ({
@@ -67,16 +67,16 @@ export const useGameStore = create<GameState>((set, get) => ({
         })),
 
     equipTool: (toolName) => {
-        const tool = findToolByName(toolName);
-        if (toolName === null || (tool && (get().inventory[toolName] || 0) > 0)) {
+        if (toolName === null) {
+            set({ currentTool: null });
+            return;
+        }
+
+        const tool = ALL_TOOLS[toolName as ToolType];
+        if (tool && (get().inventory[toolName] || 0) > 0) {
             set({ currentTool: tool });
         }
     },
-
-    hotbar: [null, null, null, null],
-    selectedHotbarIndex: 0,
-    selectedResource: null,
-    isInventoryOpen: false,
 
     getTotalItems: () => calculateTotalItems(get().inventory),
 
@@ -126,20 +126,17 @@ export const useGameStore = create<GameState>((set, get) => ({
         const state = get();
         const inventory = state.inventory;
 
-        // Kontrollera om spelaren har tillräckligt av alla ingredienser
         const hasIngredients = Object.entries(info.recipe).every(
             ([ingredient, neededAmount]) => (inventory[ingredient] || 0) >= neededAmount,
         );
 
         if (!hasIngredients || !state.canPickUp()) return false;
 
-        // Dra av ingredienserna från inventory
         const newInventory = { ...inventory };
         Object.entries(info.recipe).forEach(([ingredient, neededAmount]) => {
             newInventory[ingredient] -= neededAmount;
         });
 
-        // Lägg till den tillverkade enheten (t.ex. 1 ingot eller 1 chest)
         newInventory[itemKey] = (newInventory[itemKey] || 0) + 1;
 
         set({ inventory: newInventory });
@@ -167,7 +164,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         const state = get();
         const newHotbar = [...state.hotbar];
 
-        // Om resursen redan finns i hotbaren, rensa den tidigare sloten (flytta istället för duplicera)
         if (resource) {
             const existingIndex = newHotbar.indexOf(resource);
             if (existingIndex !== -1 && existingIndex !== index) {

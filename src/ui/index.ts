@@ -5,5 +5,4 @@ export * from "./InventoryModal";
 export * from "./HealthBar";
 export * from "./Hotbar";
 export * from "./ToolSlot";
-export * from "./UITypes";
 export * from "./uiHelpers";

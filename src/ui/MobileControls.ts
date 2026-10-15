@@ -1,19 +1,7 @@
-export interface MobileInputState {
-    left: boolean;
-    right: boolean;
-    up: boolean;
-    down: boolean;
-    jump: boolean;
-    primaryAction: boolean;
-    secondaryAction: boolean;
-}
+import type { MobileInputState } from "types";
 
 export class MobileControls extends HTMLElement {
     public state: MobileInputState = {
-        left: false,
-        right: false,
-        up: false,
-        down: false,
         jump: false,
         primaryAction: false,
         secondaryAction: false,
@@ -139,11 +127,7 @@ export class MobileControls extends HTMLElement {
     }
 
     private setupEvents(): void {
-        this.bindButton("btn-left", "left");
-        this.bindButton("btn-right", "right");
         this.bindButton("btn-jump", "jump");
-        this.bindButton("btn-up", "up");
-        this.bindButton("btn-down", "down");
         this.bindButton("btn-primaryAction", "primaryAction");
         this.bindButton("btn-secondaryAction", "secondaryAction");
     }

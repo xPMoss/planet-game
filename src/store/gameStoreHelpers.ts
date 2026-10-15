@@ -2,7 +2,7 @@
 
 import { ALL_TOOLS } from "./gameStoreTypes";
 import type { ResourceType, ToolType, Tool } from "types";
-import { RESOURCE_INFO } from "ui";
+import { RESOURCE_INFO } from "types";
 
 const MAX_STACK_SIZE = 64;
 
